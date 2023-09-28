@@ -30,7 +30,7 @@ func checkValue(value string) bool {
 	return false
 }
 
-func check(p []string) int {
+func control(p []string) int {
 	switch count := len(p); count {
 	case 5:
 		if !checkType(p[2]) || !checkValue(p[4]) {
@@ -65,7 +65,7 @@ func request(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := strings.Split(r.URL.Path, "/")
-	w.WriteHeader(check(p))
+	w.WriteHeader(control(p))
 	fmt.Println(storage.metrics)
 }
 
