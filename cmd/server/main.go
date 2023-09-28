@@ -55,6 +55,10 @@ func control(p []string) int {
 		if _, err := strconv.Atoi(p[3]); err == nil {
 			return http.StatusNotFound
 		}
+	case 3:
+		if checkType(p[2]) {
+			return http.StatusNotFound
+		}
 	}
 	return http.StatusBadRequest
 }
