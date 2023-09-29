@@ -15,7 +15,7 @@ var storage = MemStorage{}
 
 func paths(url string) []string {
 
-	reg, _ := regexp.Compile("\\w+")
+	var reg = regexp.MustCompile(`\w+`)
 	paths := reg.FindAllString(url, -1)
 	return paths
 }
@@ -47,11 +47,7 @@ func control(p []string) int {
 			value, err := strconv.ParseFloat(p[3], 64)
 			if err == nil {
 				if p[1] == "counter" {
-					if _, ok := storage.metrics[p[2]]; ok {
-						storage.metrics[p[2]] += value
-					} else {
-						storage.metrics[p[2]] = value
-					}
+					storage.metrics[p[2]] += value
 				} else {
 					storage.metrics[p[2]] = value
 				}
