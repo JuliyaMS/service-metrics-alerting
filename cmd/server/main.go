@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
-	"strings"
 )
 
 type MemStorage struct {
@@ -12,6 +12,13 @@ type MemStorage struct {
 }
 
 var storage = MemStorage{}
+
+func paths(url string) []string {
+
+	reg, _ := regexp.Compile("\\w+")
+	paths := reg.FindAllString(url, -1)
+	return paths
+}
 
 func checkType(value string) bool {
 	types := []string{"gauge", "counter"}
@@ -32,34 +39,35 @@ func checkValue(value string) bool {
 
 func control(p []string) int {
 	switch count := len(p); count {
-	case 5:
-		if !checkType(p[2]) || !checkValue(p[4]) {
+	case 4:
+		if !checkType(p[1]) || !checkValue(p[3]) {
 			return http.StatusBadRequest
 
 		} else {
-			value, err := strconv.ParseFloat(p[4], 64)
+			value, err := strconv.ParseFloat(p[3], 64)
 			if err == nil {
-				if p[2] == "counter" {
-					if _, ok := storage.metrics[p[3]]; ok {
-						storage.metrics[p[3]] += value
+				if p[1] == "counter" {
+					if _, ok := storage.metrics[p[2]]; ok {
+						storage.metrics[p[2]] += value
 					} else {
-						storage.metrics[p[3]] = value
+						storage.metrics[p[2]] = value
 					}
 				} else {
-					storage.metrics[p[3]] = value
+					storage.metrics[p[2]] = value
 				}
 				return http.StatusOK
 			}
 		}
-	case 4:
-		if _, err := strconv.Atoi(p[3]); err == nil {
+	case 3:
+		if _, err := strconv.Atoi(p[2]); err == nil || checkType(p[1]) {
 			return http.StatusNotFound
 		}
-	case 3:
-		if checkType(p[2]) {
+	case 2:
+		if checkType(p[1]) {
 			return http.StatusNotFound
 		}
 	}
+
 	return http.StatusBadRequest
 }
 
@@ -68,7 +76,8 @@ func request(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	p := strings.Split(r.URL.Path, "/")
+	p := paths(r.URL.Path)
+
 	w.WriteHeader(control(p))
 	fmt.Println(storage.metrics)
 }
