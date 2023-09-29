@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -15,7 +16,7 @@ var storage = MemStorage{}
 
 func paths(url string) []string {
 
-	var reg = regexp.MustCompile(`\w+`)
+	var reg = regexp.MustCompile(`\w+\.?\w*`)
 	paths := reg.FindAllString(url, -1)
 	return paths
 }
@@ -48,14 +49,15 @@ func control(p []string) int {
 			if p[1] == "counter" {
 				if value, err := strconv.ParseInt(p[3], 10, 64); err == nil {
 					storage.metricsCounter[p[2]] += value
+					return http.StatusOK
 				}
 
 			} else {
 				if value, err := strconv.ParseFloat(p[3], 64); err == nil {
 					storage.metricsGauge[p[2]] = value
+					return http.StatusOK
 				}
 			}
-			return http.StatusOK
 
 		}
 	case 3:
@@ -77,8 +79,10 @@ func request(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := paths(r.URL.Path)
-
+	fmt.Println(p)
 	w.WriteHeader(control(p))
+	fmt.Println(storage.metricsGauge)
+	fmt.Println(storage.metricsCounter)
 }
 
 func run() error {
