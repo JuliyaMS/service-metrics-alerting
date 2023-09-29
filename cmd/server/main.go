@@ -1,14 +1,14 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
 )
 
 type MemStorage struct {
-	metrics map[string]float64
+	metricsGauge   map[string]float64
+	metricsCounter map[string]int64
 }
 
 var storage = MemStorage{}
@@ -44,15 +44,19 @@ func control(p []string) int {
 			return http.StatusBadRequest
 
 		} else {
-			value, err := strconv.ParseFloat(p[3], 64)
-			if err == nil {
-				if p[1] == "counter" {
-					storage.metrics[p[2]] += value
-				} else {
-					storage.metrics[p[2]] = value
+
+			if p[1] == "counter" {
+				if value, err := strconv.ParseInt(p[3], 10, 64); err == nil {
+					storage.metricsCounter[p[2]] += value
 				}
-				return http.StatusOK
+
+			} else {
+				if value, err := strconv.ParseFloat(p[3], 64); err == nil {
+					storage.metricsGauge[p[2]] = value
+				}
 			}
+			return http.StatusOK
+
 		}
 	case 3:
 		if _, err := strconv.Atoi(p[2]); err == nil || checkType(p[1]) {
@@ -75,7 +79,6 @@ func request(w http.ResponseWriter, r *http.Request) {
 	p := paths(r.URL.Path)
 
 	w.WriteHeader(control(p))
-	fmt.Println(storage.metrics)
 }
 
 func run() error {
@@ -85,7 +88,8 @@ func run() error {
 }
 
 func main() {
-	storage.metrics = make(map[string]float64)
+	storage.metricsGauge = make(map[string]float64)
+	storage.metricsCounter = make(map[string]int64)
 	if err := run(); err != nil {
 		panic(err)
 	}
