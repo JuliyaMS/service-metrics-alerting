@@ -2,70 +2,31 @@ package main
 
 import (
 	"fmt"
+	"github.com/JuliyaMS/service-metrics-alerting/cmd/server/checks"
+	"github.com/JuliyaMS/service-metrics-alerting/cmd/server/storage"
 	"net/http"
 	"regexp"
-	"strconv"
 )
 
-type MemStorage struct {
-	metricsGauge   map[string]float64
-	metricsCounter map[string]int64
-}
-
-var storage = MemStorage{}
+var memStor = storage.MemStorage{}
 
 func paths(url string) []string {
 
 	var reg = regexp.MustCompile(`\w+\.?\w*`)
-	paths := reg.FindAllString(url, -1)
-	return paths
-}
-
-func checkType(value string) bool {
-	types := []string{"gauge", "counter"}
-	for _, tp := range types {
-		if tp == value {
-			return true
-		}
-	}
-	return false
-}
-
-func checkValue(value string) bool {
-	if _, err := strconv.ParseFloat(value, 64); err == nil {
-		return true
-	}
-	return false
+	p := reg.FindAllString(url, -1)
+	return p
 }
 
 func control(p []string) int {
 	switch count := len(p); count {
 	case 4:
-		if !checkType(p[1]) || !checkValue(p[3]) {
-			return http.StatusBadRequest
-
-		} else {
-
-			if p[1] == "counter" {
-				if value, err := strconv.ParseInt(p[3], 10, 64); err == nil {
-					storage.metricsCounter[p[2]] += value
-					return http.StatusOK
-				}
-
-			} else {
-				if value, err := strconv.ParseFloat(p[3], 64); err == nil {
-					storage.metricsGauge[p[2]] = value
-					return http.StatusOK
-				}
-			}
-
-		}
+		return memStor.Add(p[1], p[2], p[3])
 	case 3:
-		if _, err := strconv.Atoi(p[2]); err == nil || checkType(p[1]) {
+		if checks.CheckDigit(p[1], p[2]) || checks.CheckType(p[1]) {
 			return http.StatusNotFound
 		}
 	case 2:
-		if checkType(p[1]) {
+		if checks.CheckType(p[1]) {
 			return http.StatusNotFound
 		}
 	}
@@ -81,8 +42,8 @@ func request(w http.ResponseWriter, r *http.Request) {
 	p := paths(r.URL.Path)
 	fmt.Println(p)
 	w.WriteHeader(control(p))
-	fmt.Println(storage.metricsGauge)
-	fmt.Println(storage.metricsCounter)
+	fmt.Println(memStor.MetricsGauge)
+	fmt.Println(memStor.MetricsCounter)
 }
 
 func run() error {
@@ -92,8 +53,7 @@ func run() error {
 }
 
 func main() {
-	storage.metricsGauge = make(map[string]float64)
-	storage.metricsCounter = make(map[string]int64)
+	memStor.Init()
 	if err := run(); err != nil {
 		panic(err)
 	}
