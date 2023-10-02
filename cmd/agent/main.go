@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -56,18 +57,18 @@ func changeMetrics(rtm runtime.MemStats) {
 
 }
 
-func sendRequest(serverPort int) error {
+func SendRequest(serverPort int) error {
 	for k, v := range metricsGauge {
 		requestURL := fmt.Sprintf("http://localhost:%d/update/gauge/%s/%f", serverPort, k, v)
 		_, err := http.Post(requestURL, "Content-Type: text/plain", nil)
 		if err != nil {
-			return err
+			return errors.New("request failed")
 		}
 	}
 	requestURL := fmt.Sprintf("http://localhost:%d/update/counter/PollCounter/%d", serverPort, PollCounter)
 	_, err := http.Post(requestURL, "Content-Type: text/plain", nil)
 	if err != nil {
-		return err
+		return errors.New("request failed")
 	}
 	time.Sleep(1 * time.Second)
 	return nil
@@ -81,9 +82,9 @@ func main() {
 		<-time.After(interval)
 		changeMetrics(rtm)
 		if PollCounter%5 == 0 {
-			err := sendRequest(8080)
+			err := SendRequest(8080)
 			if err != nil {
-				panic("Request failed")
+				panic(err)
 			}
 		}
 	}

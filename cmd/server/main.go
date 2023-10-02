@@ -34,11 +34,17 @@ func control(p []string) int {
 	return http.StatusBadRequest
 }
 
-func request(w http.ResponseWriter, r *http.Request) {
+func RequestPost(w http.ResponseWriter, r *http.Request) {
+
+	if memStor.MetricsGauge == nil && memStor.MetricsCounter == nil {
+		memStor.Init()
+	}
+
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+
 	p := paths(r.URL.Path)
 	fmt.Println(p)
 	w.WriteHeader(control(p))
@@ -48,12 +54,11 @@ func request(w http.ResponseWriter, r *http.Request) {
 
 func run() error {
 	mux := http.NewServeMux()
-	mux.HandleFunc(`/update/`, request)
+	mux.HandleFunc(`/update/`, RequestPost)
 	return http.ListenAndServe(`:8080`, mux)
 }
 
 func main() {
-	memStor.Init()
 	if err := run(); err != nil {
 		panic(err)
 	}
