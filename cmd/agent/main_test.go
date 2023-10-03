@@ -19,7 +19,7 @@ func TestSendRequest(t *testing.T) {
 		{
 			nameTest: "Test 1",
 			port:     8080,
-			want:     nil,
+			want:     errors.New("request failed"),
 		},
 		{
 			nameTest: "Test 2",

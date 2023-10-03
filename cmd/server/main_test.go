@@ -45,6 +45,7 @@ func TestRequestPost(t *testing.T) {
 			w := httptest.NewRecorder()
 			RequestPost(w, request)
 			res := w.Result()
+			defer res.Body.Close()
 			// проверяем код ответа
 			assert.Equal(t, test.want, res.StatusCode)
 		})

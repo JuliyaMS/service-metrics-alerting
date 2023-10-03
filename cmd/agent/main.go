@@ -60,15 +60,21 @@ func changeMetrics(rtm runtime.MemStats) {
 func SendRequest(serverPort int) error {
 	for k, v := range metricsGauge {
 		requestURL := fmt.Sprintf("http://localhost:%d/update/gauge/%s/%f", serverPort, k, v)
-		_, err := http.Post(requestURL, "Content-Type: text/plain", nil)
+		res, err := http.Post(requestURL, "Content-Type: text/plain", nil)
 		if err != nil {
 			return errors.New("request failed")
 		}
+		if er := res.Body.Close(); er != nil {
+			return er
+		}
 	}
 	requestURL := fmt.Sprintf("http://localhost:%d/update/counter/PollCounter/%d", serverPort, PollCounter)
-	_, err := http.Post(requestURL, "Content-Type: text/plain", nil)
+	res, err := http.Post(requestURL, "Content-Type: text/plain", nil)
 	if err != nil {
 		return errors.New("request failed")
+	}
+	if er := res.Body.Close(); er != nil {
+		return er
 	}
 	time.Sleep(1 * time.Second)
 	return nil
