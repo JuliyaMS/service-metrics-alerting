@@ -25,12 +25,12 @@ type counter struct {
 	Value int64
 }
 
-type HtmlDataGauge struct {
+type HTMLDataGauge struct {
 	NameMetric string
 	Items      []gauge
 }
 
-type HtmlDataCounter struct {
+type HTMLDataCounter struct {
 	NameMetric string
 	Items      []counter
 }
@@ -111,9 +111,9 @@ func (s MemStorage) Get(tp, name string) string {
 	return "-1"
 }
 
-func (s MemStorage) getHTMLStructGauge() HtmlDataGauge {
+func (s MemStorage) getHTMLStructGauge() HTMLDataGauge {
 	var htmlGauge []gauge
-	var htmlData HtmlDataGauge
+	var htmlData HTMLDataGauge
 	for key, value := range s.metricsGauge {
 		htmlGauge = append(htmlGauge, gauge{Name: key, Value: value})
 	}
@@ -122,9 +122,9 @@ func (s MemStorage) getHTMLStructGauge() HtmlDataGauge {
 	return htmlData
 }
 
-func (s MemStorage) getHTMLStructCounter() HtmlDataCounter {
+func (s MemStorage) getHTMLStructCounter() HTMLDataCounter {
 	var htmlCounter []counter
-	var htmlData HtmlDataCounter
+	var htmlData HTMLDataCounter
 	for key, value := range s.metricsCounter {
 		htmlCounter = append(htmlCounter, counter{Name: key, Value: value})
 	}
@@ -133,7 +133,7 @@ func (s MemStorage) getHTMLStructCounter() HtmlDataCounter {
 	return htmlData
 }
 
-func (s MemStorage) GetHTMLStructs() (HtmlDataCounter, HtmlDataGauge) {
+func (s MemStorage) GetHTMLStructs() (HTMLDataCounter, HTMLDataGauge) {
 	return s.getHTMLStructCounter(), s.getHTMLStructGauge()
 }
 
