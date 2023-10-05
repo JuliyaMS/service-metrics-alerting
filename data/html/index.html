@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<table style="width:10%" border="1">
+    <caption>{{.NameMetric}}</caption>
+    <tr>
+        <th style="text-align: center; ">Name</th>
+        <th style="text-align: center; ">Value</th>
+    </tr>
+    {{ range .Items}}
+    <tr style="width:10%">
+        <td style="text-align: center; ">{{ .Name }}</td>
+        <td style="text-align: center; ">{{ .Value }}</td>
+    </tr>
+    {{ end}}
+</table>
+</body>
+</html>
