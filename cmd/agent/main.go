@@ -81,6 +81,7 @@ func SendRequest(serverPort int) error {
 }
 
 func main() {
+	parseFlagsAgent()
 	var rtm runtime.MemStats
 	var duration = uint(2)
 	var interval = time.Duration(duration) * time.Second

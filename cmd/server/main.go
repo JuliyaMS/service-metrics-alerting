@@ -6,8 +6,9 @@ import (
 )
 
 func main() {
+	parseFlagsServer()
 	r := headers.Router()
-	if err := http.ListenAndServe(":8080", r); err != nil {
+	if err := http.ListenAndServe(flagRunSerAddr, r); err != nil {
 		panic(err)
 	}
 }
