@@ -66,17 +66,16 @@ func (s MemStorage) addCounter(name string, val string) bool {
 func (s MemStorage) Add(t string, name string, val string) int {
 	if !checks.CheckType(t) {
 		return http.StatusBadRequest
-	} else {
-		if t == "counter" {
-			if s.addCounter(name, val) {
-				return http.StatusOK
-			}
-		} else {
-			if s.addGauge(name, val) {
-				return http.StatusOK
-			}
+	}
+	if t == "counter" {
+		if s.addCounter(name, val) {
+			return http.StatusOK
 		}
 	}
+	if s.addGauge(name, val) {
+		return http.StatusOK
+	}
+
 	return http.StatusBadRequest
 }
 
@@ -103,10 +102,10 @@ func (s MemStorage) Get(tp, name string) string {
 		if tp == "gauge" {
 			value := s.getGaugeMetric(name)
 			return value
-		} else {
-			value := s.getCounterMetric(name)
-			return value
 		}
+		value := s.getCounterMetric(name)
+		return value
+
 	}
 	return "-1"
 }

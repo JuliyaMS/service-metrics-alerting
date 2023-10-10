@@ -15,14 +15,6 @@ var metricsGauge = []string{"Alloc", "BuckHashSys", "Frees",
 	"NumForcedGC", "NumGC", "OtherSys", "PauseTotalNs", "StackInuse",
 	"StackSys", "Sys", "TotalAlloc", "RandomValue"}
 
-func CheckName(name string) bool {
-	for _, nm := range metricsGauge {
-		if nm == name {
-			return true
-		}
-	}
-	return false
-}
 func CheckType(value string) bool {
 	types := []string{"gauge", "counter"}
 	for _, tp := range types {

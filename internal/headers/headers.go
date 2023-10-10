@@ -87,10 +87,9 @@ func requestType(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
 	if checks.CheckType(metricType) {
 		w.WriteHeader(http.StatusNotFound)
-	} else {
-		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
-
+	w.WriteHeader(http.StatusBadRequest)
 }
 
 func requestEmpty(w http.ResponseWriter, r *http.Request) {
