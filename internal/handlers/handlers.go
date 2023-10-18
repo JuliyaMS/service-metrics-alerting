@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/html"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/storage"
 	"github.com/go-chi/chi/v5"
@@ -107,13 +108,13 @@ func (h *Handlers) requestEmpty(w http.ResponseWriter, r *http.Request) {
 func routePost(r *chi.Mux, h *Handlers) {
 
 	r.Route("/update", func(r chi.Router) {
-		r.Post("/", h.requestEmpty)
+		r.Post("/", logger.LoggingServer(h.requestEmpty))
 		r.Route("/{type}", func(r chi.Router) {
-			r.Post("/", h.requestType)
+			r.Post("/", logger.LoggingServer(h.requestType))
 			r.Route("/{name}", func(r chi.Router) {
-				r.Post("/", h.requestName)
+				r.Post("/", logger.LoggingServer(h.requestName))
 				r.Route("/{value}", func(r chi.Router) {
-					r.Post("/", h.requestValue)
+					r.Post("/", logger.LoggingServer(h.requestValue))
 				})
 			})
 		})
@@ -122,11 +123,11 @@ func routePost(r *chi.Mux, h *Handlers) {
 
 func routeGet(r *chi.Mux, h *Handlers) {
 	r.Route("/value", func(r chi.Router) {
-		r.Get("/", h.requestEmpty)
+		r.Get("/", logger.LoggingServer(h.requestEmpty))
 		r.Route("/{type}", func(r chi.Router) {
-			r.Get("/", h.requestType)
+			r.Get("/", logger.LoggingServer(h.requestType))
 			r.Route("/{name}", func(r chi.Router) {
-				r.Get("/", h.requestGetName)
+				r.Get("/", logger.LoggingServer(h.requestGetName))
 			})
 		})
 	})
@@ -139,6 +140,6 @@ func NewRouter() *chi.Mux {
 	r := chi.NewRouter()
 	routePost(r, handlers)
 	routeGet(r, handlers)
-	r.Get("/", handlers.requestGetAll)
+	r.Get("/", logger.LoggingServer(handlers.requestGetAll))
 	return r
 }

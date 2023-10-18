@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"os"
 	"strconv"
 	"strings"
@@ -74,9 +75,8 @@ func GetAgentConfig() {
 func GetServerConfig() {
 	flag.StringVar(&FlagRunSerAddr, "a", ":8080", "address and port to run server")
 	if err := checkFlagsServer(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		flag.Usage()
-		os.Exit(1)
+		logger.Logger.Fatalf(err.Error(), "event", "get server config")
 	}
 	if envRunAgAddr := os.Getenv("ADDRESS"); envRunAgAddr != "" {
 		FlagRunSerAddr = envRunAgAddr
