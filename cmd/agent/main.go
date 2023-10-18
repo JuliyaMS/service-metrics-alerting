@@ -57,18 +57,19 @@ func changeMetrics(rtm runtime.MemStats) {
 
 }
 
-func SendRequest(serverPort int) error {
+func SendRequest() error {
 	for k, v := range metricsGauge {
-		requestURL := fmt.Sprintf("http://localhost:%d/update/gauge/%s/%f", serverPort, k, v)
+		requestURL := fmt.Sprintf("http://%s/update/gauge/%s/%f", flagRunAgAddr, k, v)
 		res, err := http.Post(requestURL, "Content-Type: text/plain", nil)
 		if err != nil {
+			fmt.Println(err)
 			return errors.New("request failed")
 		}
 		if er := res.Body.Close(); er != nil {
 			return er
 		}
 	}
-	requestURL := fmt.Sprintf("http://localhost:%d/update/counter/PollCounter/%d", serverPort, PollCounter)
+	requestURL := fmt.Sprintf("http://%s/update/counter/PollCounter/%d", flagRunAgAddr, PollCounter)
 	res, err := http.Post(requestURL, "Content-Type: text/plain", nil)
 	if err != nil {
 		return errors.New("request failed")
@@ -81,14 +82,15 @@ func SendRequest(serverPort int) error {
 }
 
 func main() {
+	parseFlagsAgent()
 	var rtm runtime.MemStats
-	var duration = uint(2)
-	var interval = time.Duration(duration) * time.Second
+	var interval = time.Duration(pollInterval) * time.Second
+	var count = uint64(reportInterval / pollInterval)
 	for {
 		<-time.After(interval)
 		changeMetrics(rtm)
-		if PollCounter%5 == 0 {
-			err := SendRequest(8080)
+		if PollCounter == count {
+			err := SendRequest()
 			if err != nil {
 				panic(err)
 			}
