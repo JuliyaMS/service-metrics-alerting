@@ -1,4 +1,4 @@
-package checks
+package metrics
 
 import (
 	"github.com/stretchr/testify/assert"

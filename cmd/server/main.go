@@ -1,14 +1,15 @@
 package main
 
 import (
-	"github.com/JuliyaMS/service-metrics-alerting/internal/headers"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/handlers"
 	"net/http"
 )
 
 func main() {
-	parseFlagsServer()
-	r := headers.Router()
-	if err := http.ListenAndServe(flagRunSerAddr, r); err != nil {
+	config.GetServerConfig()
+	r := handlers.NewRouter()
+	if err := http.ListenAndServe(config.FlagRunSerAddr, r); err != nil {
 		panic(err)
 	}
 }

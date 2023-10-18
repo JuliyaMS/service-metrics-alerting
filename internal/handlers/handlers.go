@@ -1,17 +1,26 @@
-package headers
+package handlers
 
 import (
 	"fmt"
-	"github.com/JuliyaMS/service-metrics-alerting/internal/checks"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/html"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"html/template"
 	"net/http"
 )
 
-var memStor = storage.MemStorage{}
+type Handlers struct {
+	memStor storage.Repositories
+}
 
-func requestValue(w http.ResponseWriter, r *http.Request) {
+func NewHandlers(stor storage.Repositories) *Handlers {
+	return &Handlers{
+		memStor: stor,
+	}
+}
+
+func (h *Handlers) requestValue(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -22,12 +31,11 @@ func requestValue(w http.ResponseWriter, r *http.Request) {
 	metricName := chi.URLParam(r, "name")
 	metricValue := chi.URLParam(r, "value")
 
-	w.WriteHeader(memStor.Add(metricType, metricName, metricValue))
-	memStor.Print()
+	w.WriteHeader(h.memStor.Add(metricType, metricName, metricValue))
 
 }
 
-func requestName(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) requestName(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -37,15 +45,14 @@ func requestName(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
 	metricName := chi.URLParam(r, "name")
 
-	if checks.CheckDigit(metricType, metricName) || checks.CheckType(metricType) {
+	if metrics.CheckDigit(metricType, metricName) || metrics.CheckType(metricType) {
 		w.WriteHeader(http.StatusNotFound)
-	} else {
-		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
-
+	w.WriteHeader(http.StatusBadRequest)
 }
 
-func requestGetName(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) requestGetName(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -55,7 +62,7 @@ func requestGetName(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
 	metricName := chi.URLParam(r, "name")
 
-	value := memStor.Get(metricType, metricName)
+	value := h.memStor.Get(metricType, metricName)
 	fmt.Println(value)
 	if value != "-1" {
 		w.Write([]byte(value))
@@ -67,14 +74,14 @@ func requestGetName(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func requestGetAll(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) requestGetAll(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
-	dataCounter, dataGauge := memStor.GetHTMLStructs()
+	dataGauge, dataCounter := html.GetHTMLStructs(h.memStor.GetAll())
 	tmpl, _ := template.ParseFiles("../../data/html/index.html")
 	tmpl.Execute(w, dataGauge)
 	tmpl.Execute(w, dataCounter)
@@ -82,56 +89,56 @@ func requestGetAll(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func requestType(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) requestType(w http.ResponseWriter, r *http.Request) {
 
 	metricType := chi.URLParam(r, "type")
-	if checks.CheckType(metricType) {
+	if metrics.CheckType(metricType) {
 		w.WriteHeader(http.StatusNotFound)
-	} else {
-		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
-
+	w.WriteHeader(http.StatusBadRequest)
 }
 
-func requestEmpty(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) requestEmpty(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusBadRequest)
 }
 
-func routePost(r *chi.Mux) {
+func routePost(r *chi.Mux, h *Handlers) {
 
 	r.Route("/update", func(r chi.Router) {
-		r.Post("/", requestEmpty)
+		r.Post("/", h.requestEmpty)
 		r.Route("/{type}", func(r chi.Router) {
-			r.Post("/", requestType)
+			r.Post("/", h.requestType)
 			r.Route("/{name}", func(r chi.Router) {
-				r.Post("/", requestName)
+				r.Post("/", h.requestName)
 				r.Route("/{value}", func(r chi.Router) {
-					r.Post("/", requestValue)
+					r.Post("/", h.requestValue)
 				})
 			})
 		})
 	})
 }
 
-func routeGet(r *chi.Mux) {
+func routeGet(r *chi.Mux, h *Handlers) {
 	r.Route("/value", func(r chi.Router) {
-		r.Get("/", requestEmpty)
+		r.Get("/", h.requestEmpty)
 		r.Route("/{type}", func(r chi.Router) {
-			r.Get("/", requestType)
+			r.Get("/", h.requestType)
 			r.Route("/{name}", func(r chi.Router) {
-				r.Get("/", requestGetName)
+				r.Get("/", h.requestGetName)
 			})
 		})
 	})
 }
 
-func Router() *chi.Mux {
-	memStor.Init()
+func NewRouter() *chi.Mux {
+	handlers := NewHandlers(&storage.MemStorage{})
+	handlers.memStor.Init()
 
 	r := chi.NewRouter()
-	routePost(r)
-	routeGet(r)
-	r.Get("/", requestGetAll)
+	routePost(r, handlers)
+	routeGet(r, handlers)
+	r.Get("/", handlers.requestGetAll)
 	return r
 }

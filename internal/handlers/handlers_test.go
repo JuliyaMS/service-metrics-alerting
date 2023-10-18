@@ -1,4 +1,4 @@
-package headers
+package handlers
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -24,7 +24,7 @@ func testRequest(t *testing.T, ts *httptest.Server, method,
 }
 
 func TestRouter(t *testing.T) {
-	ts := httptest.NewServer(Router())
+	ts := httptest.NewServer(NewRouter())
 	defer ts.Close()
 
 	tests := []struct {
