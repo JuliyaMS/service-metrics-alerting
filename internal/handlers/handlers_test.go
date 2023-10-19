@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io"
@@ -26,6 +27,8 @@ func testRequest(t *testing.T, ts *httptest.Server, method,
 func TestRouter(t *testing.T) {
 	ts := httptest.NewServer(NewRouter())
 	defer ts.Close()
+
+	logger.NewLogger()
 
 	tests := []struct {
 		nameTest string
