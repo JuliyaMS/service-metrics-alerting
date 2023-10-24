@@ -8,9 +8,9 @@ import (
 )
 
 func main() {
+	logger.NewLogger()
 	config.GetServerConfig()
 	r := handlers.NewRouter()
-	logger.NewLogger()
 
 	logger.Logger.Infow("Start server", "addr", config.FlagRunSerAddr)
 

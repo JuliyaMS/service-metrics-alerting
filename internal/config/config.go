@@ -56,6 +56,8 @@ func checkFlagsServer() error {
 
 func GetAgentConfig() {
 
+	logger.Agent.Infow("Parse Agent config")
+
 	flag.StringVar(&FlagRunAgAddr, "a", ":8080", "address and port to run server")
 	flag.IntVar(&reportInterval, "r", 10, "time interval for generate metrics")
 	flag.IntVar(&pollInterval, "p", 2, "time interval for send request to server")
@@ -73,6 +75,9 @@ func GetAgentConfig() {
 }
 
 func GetServerConfig() {
+
+	logger.Logger.Infow("Parse Server config")
+
 	flag.StringVar(&FlagRunSerAddr, "a", ":8080", "address and port to run server")
 	if err := checkFlagsServer(); err != nil {
 		flag.Usage()

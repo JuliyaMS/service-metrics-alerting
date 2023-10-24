@@ -10,10 +10,9 @@ import (
 )
 
 func main() {
+	logger.NewLoggerAgent()
 	config.GetAgentConfig()
-	logger.NewLogger()
 	var rtm runtime.MemStats
-	time.Sleep(5 * time.Second)
 	for {
 		<-time.After(config.TimeInterval)
 		metrics.ChangeMetrics(&rtm)
