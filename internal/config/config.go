@@ -12,7 +12,7 @@ import (
 )
 
 var FlagRunSerAddr string
-var CountIteration uint64
+var CountIteration int64
 var FlagRunAgAddr string
 var TimeInterval time.Duration
 var reportInterval int
@@ -68,7 +68,7 @@ func GetAgentConfig() {
 	flag.Parse()
 	getEnvConfig()
 
-	CountIteration = uint64(reportInterval / pollInterval)
+	CountIteration = int64(reportInterval / pollInterval)
 	TimeInterval = time.Duration(pollInterval) * time.Second
 }
 

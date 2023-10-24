@@ -5,7 +5,7 @@ import (
 	"runtime"
 )
 
-var PollCounter = uint64(0)
+var PollCount = int64(0)
 
 var GaugeAgent = GaugeMetrics{metrics: map[string]float64{"Alloc": 0, "BuckHashSys": 0, "Frees": 0,
 	"GCCPUFraction": 0, "GCSys": 0, "HeapAlloc": 0, "HeapIdle": 0, "HeapInuse": 0,
@@ -49,6 +49,6 @@ func ChangeMetrics(rtm *runtime.MemStats) {
 	GaugeAgent.metrics["Sys"] = float64(rtm.Sys)
 	GaugeAgent.metrics["TotalAlloc"] = float64(rtm.TotalAlloc)
 	GaugeAgent.metrics["RandomValue"] = randomValue()
-	PollCounter += 1
+	PollCount += 1
 
 }

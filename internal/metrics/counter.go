@@ -23,6 +23,7 @@ func (c *CounterMetrics) Init() {
 func (c *CounterMetrics) Add(name string, val string) bool {
 	if value, err := strconv.ParseInt(val, 10, 64); err == nil {
 		c.metrics[name] += value
+		c.Print()
 		return true
 	}
 	return false
