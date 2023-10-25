@@ -15,6 +15,7 @@ var FlagRunSerAddr string
 var CountIteration int64
 var FlagRunAgAddr string
 var TimeInterval time.Duration
+var TimeInterval2 time.Duration
 var reportInterval int
 var pollInterval int
 
@@ -72,6 +73,7 @@ func GetAgentConfig() {
 
 	CountIteration = int64(reportInterval / pollInterval)
 	TimeInterval = time.Duration(pollInterval) * time.Second
+	TimeInterval2 = time.Duration(reportInterval) * time.Second
 }
 
 func GetServerConfig() {

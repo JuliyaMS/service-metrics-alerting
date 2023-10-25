@@ -117,7 +117,7 @@ func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 	dec := json.NewDecoder(r.Body)
 
 	if err := dec.Decode(&req); err != nil {
-		logger.Logger.Infow("cannot decode request JSON body", zap.Error(err))
+		logger.Logger.Error("cannot decode request JSON body", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -131,7 +131,7 @@ func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(h.memStor.Add(req.MType, req.ID, strconv.FormatInt(*req.Delta, 10)))
 		newDelta, err := strconv.ParseInt(h.memStor.Get("counter", req.ID), 10, 64)
 		if err != nil {
-			logger.Logger.Infow("cannot write new Delta", zap.Error(err))
+			logger.Logger.Error("cannot write new Delta", zap.Error(err))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -143,7 +143,7 @@ func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Infow("Encode data for response")
 	enc := json.NewEncoder(w)
 	if err := enc.Encode(req); err != nil {
-		logger.Logger.Debug("error encoding response", zap.Error(err))
+		logger.Logger.Error("error encoding response", zap.Error(err))
 		return
 	}
 	logger.Logger.Infow("sending HTTP 200 response")
@@ -161,7 +161,7 @@ func (h *Handlers) requestGetValue(w http.ResponseWriter, r *http.Request) {
 	var req metrics.Metrics
 	dec := json.NewDecoder(r.Body)
 	if err := dec.Decode(&req); err != nil {
-		logger.Logger.Infow("cannot decode request JSON body", zap.Error(err))
+		logger.Logger.Error("cannot decode request JSON body", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -169,7 +169,7 @@ func (h *Handlers) requestGetValue(w http.ResponseWriter, r *http.Request) {
 		logger.Logger.Infow("Get gauge metric value", "name", req.ID)
 		Value, err := strconv.ParseFloat(h.memStor.Get(req.MType, req.ID), 64)
 		if err != nil {
-			logger.Logger.Infow("cannot write Value", zap.Error(err))
+			logger.Logger.Error("cannot write Value", zap.Error(err))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -183,7 +183,7 @@ func (h *Handlers) requestGetValue(w http.ResponseWriter, r *http.Request) {
 		logger.Logger.Infow("Get counter metric value", "name", req.ID)
 		Delta, err := strconv.ParseInt(h.memStor.Get(req.MType, req.ID), 10, 64)
 		if err != nil {
-			logger.Logger.Infow("cannot write Delta", zap.Error(err))
+			logger.Logger.Error("cannot write Delta", zap.Error(err))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -198,7 +198,7 @@ func (h *Handlers) requestGetValue(w http.ResponseWriter, r *http.Request) {
 
 	enc := json.NewEncoder(w)
 	if err := enc.Encode(req); err != nil {
-		logger.Logger.Debug("error encoding response", zap.Error(err))
+		logger.Logger.Error("error encoding response", zap.Error(err))
 		return
 	}
 	logger.Logger.Infow("sending HTTP 200 response")

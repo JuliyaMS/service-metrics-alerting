@@ -42,7 +42,6 @@ func checkFlagAgent(flag string) error {
 
 func checkFlagsAgent() error {
 	flags := os.Args[1:]
-	fmt.Println(flags)
 	if len(flags) > 0 {
 		if len(flags) > 3 {
 			return errors.New("incorrect count of command line arguments")

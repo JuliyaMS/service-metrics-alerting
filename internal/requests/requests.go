@@ -38,28 +38,26 @@ func SendRequest() error {
 
 func SendRequestJSON() error {
 
-	t := http.DefaultTransport.(*http.Transport).Clone()
-	t.DisableKeepAlives = true
-
 	req := metrics.Metrics{MType: "gauge"}
 
-	client := http.Client{Timeout: time.Duration(60) * time.Second, Transport: t}
+	client := http.Client{Timeout: time.Duration(60) * time.Second}
 	requestURL := fmt.Sprintf("http://%s/update/", config.FlagRunAgAddr)
+
 	logger.Agent.Infow("Start send metrics")
 	for k, v := range metrics.GaugeAgent.ReturnValues() {
 		logger.Agent.Infow("Encode gauge metric", "addr", config.FlagRunAgAddr, "name", k, "value", v)
 		req.ID = k
 		req.Value = &v
 		reqByte, err := json.Marshal(req)
+
 		if err != nil {
 			logger.Agent.Infow(err.Error(), "event", "encode data")
 			return errors.New("encoding data failed")
 		}
 
 		logger.Agent.Infow("Send gauge metric", "addr", config.FlagRunAgAddr, "data", string(reqByte))
-		var req2, _ = http.NewRequest("POST", requestURL, nil)
 
-		res, err := client.Do(req2)
+		res, err := client.Post(requestURL, "Content-Type: application/json", bytes.NewBuffer(reqByte))
 
 		if err != nil {
 			logger.Agent.Infow(err.Error(), "event", "send request")
