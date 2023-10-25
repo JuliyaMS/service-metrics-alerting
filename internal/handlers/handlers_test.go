@@ -25,10 +25,9 @@ func testRequest(t *testing.T, ts *httptest.Server, method,
 }
 
 func TestRouter(t *testing.T) {
+	logger.NewLogger()
 	ts := httptest.NewServer(NewRouter())
 	defer ts.Close()
-
-	logger.NewLogger()
 
 	tests := []struct {
 		nameTest string

@@ -14,9 +14,9 @@ import (
 )
 
 func TestSendRequest(t *testing.T) {
+	logger.NewLogger()
 	srv := httptest.NewServer(handlers.NewRouter())
 	defer srv.Close()
-	logger.NewLogger()
 
 	var rtm runtime.MemStats
 	metrics.ChangeMetrics(&rtm)
