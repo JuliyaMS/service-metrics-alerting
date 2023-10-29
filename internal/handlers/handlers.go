@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/gzip"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/html"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
@@ -67,7 +67,7 @@ func (h *Handlers) requestGetName(w http.ResponseWriter, r *http.Request) {
 	metricName := chi.URLParam(r, "name")
 
 	value := h.memStor.Get(metricType, metricName)
-	fmt.Println(value)
+
 	if value != "-1" {
 		w.Write([]byte(value))
 		w.WriteHeader(http.StatusOK)
@@ -80,17 +80,35 @@ func (h *Handlers) requestGetName(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) requestGetAll(w http.ResponseWriter, r *http.Request) {
 
+	logger.Logger.Infow("Get all metrics in text/html")
+
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
+	logger.Logger.Infow("Get data for HTML format")
 	dataGauge, dataCounter := html.GetHTMLStructs(h.memStor.GetAll())
-	tmpl, _ := template.ParseFiles("../../data/html/index.html")
-	tmpl.Execute(w, dataGauge)
-	tmpl.Execute(w, dataCounter)
+
+	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
 
+	logger.Logger.Infow("Open file with html table")
+	tmpl, _ := template.ParseFiles("./data/html/index.html")
+
+	logger.Logger.Infow("Execute for gauge metrics")
+
+	err := tmpl.Execute(w, dataGauge)
+	if err != nil {
+		logger.Logger.Error("Error while execute for gauge metrics", err)
+		return
+	}
+	logger.Logger.Infow("Execute for counter metrics")
+	err = tmpl.Execute(w, dataCounter)
+	if err != nil {
+		logger.Logger.Error("Error while execute for counter metrics", err)
+		return
+	}
+	logger.Logger.Infow("sending HTTP 200 response")
 }
 
 func (h *Handlers) requestType(w http.ResponseWriter, r *http.Request) {
@@ -139,13 +157,13 @@ func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-
 	logger.Logger.Infow("Encode data for response")
 	enc := json.NewEncoder(w)
 	if err := enc.Encode(req); err != nil {
 		logger.Logger.Error("error encoding response", zap.Error(err))
 		return
 	}
+	w.WriteHeader(http.StatusOK)
 	logger.Logger.Infow("sending HTTP 200 response")
 }
 
@@ -193,12 +211,13 @@ func (h *Handlers) requestGetValue(w http.ResponseWriter, r *http.Request) {
 		req.Delta = &Delta
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 
 	logger.Logger.Infow("Encode data for response")
-
 	enc := json.NewEncoder(w)
 	if err := enc.Encode(req); err != nil {
 		logger.Logger.Error("error encoding response", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	logger.Logger.Infow("sending HTTP 200 response")
@@ -212,7 +231,7 @@ func (h *Handlers) requestEmpty(w http.ResponseWriter, r *http.Request) {
 func routePost(r *chi.Mux, h *Handlers) {
 	logger.Logger.Infow("Init router for function Post")
 	r.Route("/update", func(r chi.Router) {
-		r.Post("/", logger.LoggingServer(h.requestUpdate))
+		r.Post("/", logger.LoggingServer(gzip.GzipCompression(h.requestUpdate)))
 		r.Route("/{type}", func(r chi.Router) {
 			r.Post("/", logger.LoggingServer(h.requestType))
 			r.Route("/{name}", func(r chi.Router) {
@@ -247,7 +266,7 @@ func NewRouter() *chi.Mux {
 	routePost(r, handlers)
 	routeGet(r, handlers)
 	logger.Logger.Infow("Init router another function")
-	r.Post("/value/", logger.LoggingServer(handlers.requestGetValue))
-	r.Get("/", logger.LoggingServer(handlers.requestGetAll))
+	r.Post("/value/", logger.LoggingServer(gzip.GzipCompression(handlers.requestGetValue)))
+	r.Get("/", logger.LoggingServer(gzip.GzipCompression(handlers.requestGetAll)))
 	return r
 }

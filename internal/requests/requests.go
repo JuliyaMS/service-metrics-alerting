@@ -2,6 +2,7 @@ package requests
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,6 +38,20 @@ func SendRequest() error {
 	return nil
 }
 
+func compressData(requestBody []byte) (*bytes.Buffer, error) {
+	buf := bytes.NewBuffer(nil)
+	zb := gzip.NewWriter(buf)
+	if _, err := zb.Write(requestBody); err != nil {
+		logger.Agent.Error("Error while compress data:", err.Error())
+		return nil, err
+	}
+	if err := zb.Close(); err != nil {
+		logger.Agent.Error("Error while compress data:", err.Error())
+		return nil, err
+	}
+	return buf, nil
+}
+
 func sendRequestGaugeJSON(requestURL string) error {
 
 	req := metrics.Metrics{MType: "gauge"}
@@ -53,10 +68,21 @@ func sendRequestGaugeJSON(requestURL string) error {
 			return errors.New("encoding data failed")
 		}
 
-		logger.Agent.Infow("Send gauge metric", "addr", config.FlagRunAgAddr, "data", string(reqByte))
+		buf, errCompress := compressData(reqByte)
+
+		if errCompress != nil {
+			logger.Agent.Error(errCompress.Error(), "event", "compress data")
+			return errors.New("compress data failed")
+		}
+
+		logger.Agent.Infow("Send gauge metric", "addr", config.FlagRunAgAddr, "data", buf)
 		err = retry.Do(func() error {
 			var er error
-			res, er := client.Post(requestURL, "Content-Type: application/json", bytes.NewBuffer(reqByte))
+			r, _ := http.NewRequest("POST", requestURL, buf)
+			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set("Content-Encoding", "gzip")
+			r.Header.Set("Accept-Encoding", "gzip")
+			res, er := client.Do(r)
 
 			if res != nil {
 				if erClose := res.Body.Close(); erClose != nil {
@@ -66,9 +92,9 @@ func sendRequestGaugeJSON(requestURL string) error {
 			}
 			return er
 		},
-			retry.Attempts(10),
+			retry.Attempts(100),
 			retry.OnRetry(func(n uint, err error) {
-				logger.Agent.Error("Retrying request after error: %v", err)
+				logger.Agent.Info("Retrying request after error: %v", err)
 			}))
 
 		if err != nil {
@@ -94,9 +120,20 @@ func sendRequestCounterJSON(requestURL string) error {
 		return errors.New("encoding data failed")
 	}
 
-	logger.Agent.Infow("Send counter metric", "addr", config.FlagRunAgAddr, "data", string(reqByte))
+	buf, errCompress := compressData(reqByte)
+
+	if errCompress != nil {
+		logger.Agent.Error(errCompress.Error(), "event", "compress data")
+		return errors.New("compress data failed")
+	}
+
+	logger.Agent.Infow("Send counter metric", "addr", config.FlagRunAgAddr, "data", buf)
 	err = retry.Do(func() error {
-		res, er := client.Post(requestURL, "Content-Type: application/json", bytes.NewBuffer(reqByte))
+		r, _ := http.NewRequest("POST", requestURL, buf)
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Content-Encoding", "gzip")
+		r.Header.Set("Accept-Encoding", "gzip")
+		res, er := client.Do(r)
 
 		if res != nil {
 			if erClose := res.Body.Close(); erClose != nil {
@@ -106,8 +143,8 @@ func sendRequestCounterJSON(requestURL string) error {
 		}
 		return er
 	},
-		retry.Attempts(10),
-		retry.OnRetry(func(n uint, err error) { logger.Agent.Error("Retrying request after error: %v", err) }))
+		retry.Attempts(100),
+		retry.OnRetry(func(n uint, err error) { logger.Agent.Info("Retrying request after error: %v", err) }))
 
 	if err != nil {
 		logger.Agent.Error(err.Error(), "event", "send request")
