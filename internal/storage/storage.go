@@ -5,6 +5,8 @@ import (
 	"net/http"
 )
 
+var Storage MemStorage
+
 type Repositories interface {
 	Init()
 	Add(t, name, val string) int
@@ -13,13 +15,13 @@ type Repositories interface {
 }
 
 type MemStorage struct {
-	metricsGauge   metrics.GaugeMetrics
-	metricsCounter metrics.CounterMetrics
+	MetricsGauge   metrics.GaugeMetrics
+	MetricsCounter metrics.CounterMetrics
 }
 
 func (s *MemStorage) Init() {
-	s.metricsGauge.Init()
-	s.metricsCounter.Init()
+	s.MetricsGauge.Init()
+	s.MetricsCounter.Init()
 }
 
 func (s MemStorage) Add(t, name, val string) int {
@@ -27,11 +29,11 @@ func (s MemStorage) Add(t, name, val string) int {
 		return http.StatusBadRequest
 	}
 	if t == "counter" {
-		if s.metricsCounter.Add(name, val) {
+		if s.MetricsCounter.Add(name, val) {
 			return http.StatusOK
 		}
 	}
-	if s.metricsGauge.Add(name, val) {
+	if s.MetricsGauge.Add(name, val) {
 		return http.StatusOK
 	}
 
@@ -41,10 +43,10 @@ func (s MemStorage) Add(t, name, val string) int {
 func (s MemStorage) Get(tp, name string) string {
 	if metrics.CheckType(tp) {
 		if tp == "gauge" {
-			value := s.metricsGauge.Get(name)
+			value := s.MetricsGauge.Get(name)
 			return value
 		}
-		value := s.metricsCounter.Get(name)
+		value := s.MetricsCounter.Get(name)
 		return value
 
 	}
@@ -52,5 +54,5 @@ func (s MemStorage) Get(tp, name string) string {
 }
 
 func (s *MemStorage) GetAll() (metrics.GaugeMetrics, metrics.CounterMetrics) {
-	return s.metricsGauge, s.metricsCounter
+	return s.MetricsGauge, s.MetricsCounter
 }

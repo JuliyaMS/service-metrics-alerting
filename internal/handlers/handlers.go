@@ -2,6 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/file"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/gzip"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/html"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
@@ -259,7 +262,25 @@ func routeGet(r *chi.Mux, h *Handlers) {
 
 func NewRouter() *chi.Mux {
 	logger.Logger.Infow("Init router and handlers")
-	handlers := NewHandlers(&storage.MemStorage{})
+	if config.Restore {
+		logger.Logger.Info("Read data from file:", config.FileStoragePath)
+		logger.Logger.Info("Open file")
+		decode, err := file.NewStorageFileDecode(config.FileStoragePath)
+		if err != nil {
+			logger.Logger.Errorf(err.Error(), "Can't create NewStorageFileDecode")
+			return nil
+		}
+		logger.Logger.Info("Reading...")
+		err = decode.ReadFromFile()
+		if err != nil {
+			logger.Logger.Errorf(err.Error(), "Can't read from file:", config.FileStoragePath)
+			return nil
+		}
+		logger.Logger.Info("Close file")
+		decode.Close()
+		fmt.Println(storage.Storage)
+	}
+	handlers := NewHandlers(&storage.Storage)
 	handlers.memStor.Init()
 
 	r := chi.NewRouter()
@@ -268,5 +289,6 @@ func NewRouter() *chi.Mux {
 	logger.Logger.Infow("Init router another function")
 	r.Post("/value/", logger.LoggingServer(gzip.GzipCompression(handlers.requestGetValue)))
 	r.Get("/", logger.LoggingServer(gzip.GzipCompression(handlers.requestGetAll)))
+
 	return r
 }
