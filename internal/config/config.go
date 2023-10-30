@@ -92,9 +92,6 @@ func GetServerConfig() {
 		flag.Usage()
 		logger.Logger.Fatalf(err.Error(), "event", "get server config")
 	}
-	if envRunAgAddr := os.Getenv("ADDRESS"); envRunAgAddr != "" {
-		FlagRunSerAddr = envRunAgAddr
-	}
 
 	flag.Parse()
 	getEnvConfigServer()

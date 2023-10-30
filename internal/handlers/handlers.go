@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/file"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/gzip"
@@ -260,25 +259,30 @@ func routeGet(r *chi.Mux, h *Handlers) {
 	})
 }
 
+func getDataFromFile() error {
+	logger.Logger.Info("Read data from file:", config.FileStoragePath)
+	logger.Logger.Info("Open file")
+	decode, err := file.NewStorageFileDecode(config.FileStoragePath)
+	if err != nil {
+		return err
+	}
+	logger.Logger.Info("Reading...")
+	err = decode.ReadFromFile()
+	if err != nil {
+		return err
+	}
+	logger.Logger.Info("Close file")
+	decode.Close()
+	return nil
+}
+
 func NewRouter() *chi.Mux {
 	logger.Logger.Infow("Init router and handlers")
 	if config.Restore {
-		logger.Logger.Info("Read data from file:", config.FileStoragePath)
-		logger.Logger.Info("Open file")
-		decode, err := file.NewStorageFileDecode(config.FileStoragePath)
+		err := getDataFromFile()
 		if err != nil {
-			logger.Logger.Errorf(err.Error(), "Can't create NewStorageFileDecode")
-			return nil
+			logger.Logger.Errorf(err.Error(), "Can't read data from file:", config.FileStoragePath)
 		}
-		logger.Logger.Info("Reading...")
-		err = decode.ReadFromFile()
-		if err != nil {
-			logger.Logger.Errorf(err.Error(), "Can't read from file:", config.FileStoragePath)
-			return nil
-		}
-		logger.Logger.Info("Close file")
-		decode.Close()
-		fmt.Println(storage.Storage)
 	}
 	handlers := NewHandlers(&storage.Storage)
 	handlers.memStor.Init()
