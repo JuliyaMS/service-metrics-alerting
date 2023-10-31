@@ -1,15 +1,15 @@
 package storage
 
 import (
+	"errors"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
-	"net/http"
 )
 
 var Storage MemStorage
 
 type Repositories interface {
 	Init()
-	Add(t, name, val string) int
+	Add(t, name, val string) error
 	Get(tp, name string) string
 	GetAll() (metrics.GaugeMetrics, metrics.CounterMetrics)
 }
@@ -24,20 +24,20 @@ func (s *MemStorage) Init() {
 	s.MetricsCounter.Init()
 }
 
-func (s MemStorage) Add(t, name, val string) int {
+func (s MemStorage) Add(t, name, val string) error {
 	if !metrics.CheckType(t) {
-		return http.StatusBadRequest
+		return errors.New("this type of metric doesn't exists")
 	}
 	if t == "counter" {
 		if s.MetricsCounter.Add(name, val) {
-			return http.StatusOK
+			return nil
 		}
 	}
 	if s.MetricsGauge.Add(name, val) {
-		return http.StatusOK
+		return nil
 	}
 
-	return http.StatusBadRequest
+	return errors.New("can't add metric")
 }
 
 func (s MemStorage) Get(tp, name string) string {

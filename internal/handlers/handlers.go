@@ -37,8 +37,11 @@ func (h *Handlers) requestValue(w http.ResponseWriter, r *http.Request) {
 	metricName := chi.URLParam(r, "name")
 	metricValue := chi.URLParam(r, "value")
 
-	w.WriteHeader(h.memStor.Add(metricType, metricName, metricValue))
-
+	if err := h.memStor.Add(metricType, metricName, metricValue); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *Handlers) requestName(w http.ResponseWriter, r *http.Request) {
@@ -143,12 +146,19 @@ func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.MType == "gauge" {
 		logger.Logger.Infow("Update gauge metric", "name", req.ID, "value", *req.Value)
-		w.WriteHeader(h.memStor.Add(req.MType, req.ID, strconv.FormatFloat(*req.Value, 'g', -1, 64)))
+		if err := h.memStor.Add(req.MType, req.ID, strconv.FormatFloat(*req.Value, 'g', -1, 64)); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 	}
 
 	if req.MType == "counter" {
 		logger.Logger.Infow("Update counter metric", "name", req.ID, "value", *req.Delta)
-		w.WriteHeader(h.memStor.Add(req.MType, req.ID, strconv.FormatInt(*req.Delta, 10)))
+		if err := h.memStor.Add(req.MType, req.ID, strconv.FormatInt(*req.Delta, 10)); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+
+		}
 		newDelta, err := strconv.ParseInt(h.memStor.Get("counter", req.ID), 10, 64)
 		if err != nil {
 			logger.Logger.Error("cannot write new Delta", zap.Error(err))
@@ -158,6 +168,7 @@ func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 		req.Delta = &newDelta
 	}
 
+	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 	logger.Logger.Infow("Encode data for response")
 	enc := json.NewEncoder(w)

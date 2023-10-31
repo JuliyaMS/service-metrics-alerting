@@ -1,8 +1,8 @@
 package storage
 
 import (
+	"errors"
 	"github.com/stretchr/testify/assert"
-	"net/http"
 	"testing"
 )
 
@@ -15,28 +15,28 @@ func TestMemStorage_Add(t *testing.T) {
 		typeMetric string
 		nameMetric string
 		value      string
-		want       int
+		want       error
 	}{
 		{
 			nameTest:   "Test 1",
 			typeMetric: "gauge",
 			nameMetric: "RandomValue",
 			value:      "657.123",
-			want:       http.StatusOK,
+			want:       nil,
 		},
 		{
 			nameTest:   "Test 2",
 			typeMetric: "list",
 			nameMetric: "RandomValue",
 			value:      "1.0009",
-			want:       http.StatusBadRequest,
+			want:       errors.New("this type of metric doesn't exists"),
 		},
 		{
 			nameTest:   "Test 3",
 			typeMetric: "counter",
 			nameMetric: "PollCounter",
 			value:      "21",
-			want:       http.StatusOK,
+			want:       nil,
 		},
 	}
 	for _, test := range tests {
