@@ -4,46 +4,40 @@ import (
 	"encoding/json"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/storage"
 	"os"
+	"sync"
 )
 
-type StorageFileEncode struct {
-	file    *os.File
-	encoder *json.Encoder
-}
+var fileMutex sync.Mutex
 
-func NewStorageFileEncode(filename string) (*StorageFileEncode, error) {
-	f, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR, 0666)
+func WriteToFile(fileName string) error {
+
+	fileMutex.Lock()
+	defer fileMutex.Unlock()
+
+	file, err := os.OpenFile(fileName, os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &StorageFileEncode{file: f, encoder: json.NewEncoder(f)}, nil
+	encoder := json.NewEncoder(file)
+	if err = encoder.Encode(storage.Storage); err != nil {
+		return err
+	}
+	file.Close()
+	return nil
 }
 
-func (f *StorageFileEncode) WriteToFile() error {
-	return f.encoder.Encode(storage.Storage)
-}
+func ReadFromFile(fileName string) error {
+	fileMutex.Lock()
+	defer fileMutex.Unlock()
 
-func (f *StorageFileEncode) Close() {
-	f.file.Close()
-}
-
-type StorageFileDecode struct {
-	file    *os.File
-	encoder *json.Decoder
-}
-
-func NewStorageFileDecode(filename string) (*StorageFileDecode, error) {
-	f, err := os.OpenFile(filename, os.O_RDONLY, 0666)
+	file, err := os.OpenFile(fileName, os.O_RDONLY, 0666)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &StorageFileDecode{file: f, encoder: json.NewDecoder(f)}, nil
-}
-
-func (f *StorageFileDecode) ReadFromFile() error {
-	return f.encoder.Decode(&storage.Storage)
-}
-
-func (f *StorageFileDecode) Close() {
-	f.file.Close()
+	encoder := json.NewDecoder(file)
+	if err = encoder.Decode(&storage.Storage); err != nil {
+		return err
+	}
+	file.Close()
+	return nil
 }

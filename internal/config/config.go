@@ -66,11 +66,6 @@ func GetAgentConfig() {
 	flag.StringVar(&FlagRunAgAddr, "a", ":8080", "address and port to run server")
 	flag.IntVar(&reportInterval, "r", 10, "time interval for generate metrics")
 	flag.IntVar(&pollInterval, "p", 2, "time interval for send request to server")
-	if err := checkFlagsAgent(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		flag.Usage()
-		os.Exit(1)
-	}
 
 	flag.Parse()
 	getEnvConfigAgent()
@@ -87,11 +82,6 @@ func GetServerConfig() {
 	flag.IntVar(&saveInterval, "i", 300, "time interval to save metrics in file")
 	flag.StringVar(&FileStoragePath, "f", "/tmp/metrics-db.json", "path to save file")
 	flag.BoolVar(&Restore, "r", true, "restore data from file or not")
-
-	if err := checkFlagsServer(); err != nil {
-		flag.Usage()
-		logger.Logger.Fatalf(err.Error(), "event", "get server config")
-	}
 
 	flag.Parse()
 	getEnvConfigServer()

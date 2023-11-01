@@ -35,20 +35,9 @@ func main() {
 		for {
 			<-time.After(config.StoreInterval)
 			logger.Logger.Info("Write data to file:", config.FileStoragePath)
-			logger.Logger.Info("Open file")
-			encode, err := file.NewStorageFileEncode(config.FileStoragePath)
-			if err != nil {
-				logger.Logger.Errorf(err.Error(), "Can't create NewStorageFileEncode")
-				return
+			if err := file.WriteToFile(config.FileStoragePath); err != nil {
+				logger.Logger.Error("Function WriteToFile return error:", err.Error())
 			}
-			logger.Logger.Info("Writing...")
-			err = encode.WriteToFile()
-			if err != nil {
-				logger.Logger.Errorf(err.Error(), "Can't write to file:", config.FileStoragePath)
-				return
-			}
-			logger.Logger.Info("Close file")
-			encode.Close()
 		}
 	}()
 

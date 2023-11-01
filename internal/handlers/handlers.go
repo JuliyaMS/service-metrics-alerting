@@ -270,27 +270,11 @@ func routeGet(r *chi.Mux, h *Handlers) {
 	})
 }
 
-func getDataFromFile() error {
-	logger.Logger.Info("Read data from file:", config.FileStoragePath)
-	logger.Logger.Info("Open file")
-	decode, err := file.NewStorageFileDecode(config.FileStoragePath)
-	if err != nil {
-		return err
-	}
-	logger.Logger.Info("Reading...")
-	err = decode.ReadFromFile()
-	if err != nil {
-		return err
-	}
-	logger.Logger.Info("Close file")
-	decode.Close()
-	return nil
-}
-
 func NewRouter() *chi.Mux {
 	logger.Logger.Infow("Init router and handlers")
 	if config.Restore {
-		err := getDataFromFile()
+		logger.Logger.Info("Restore data from file:", config.FileStoragePath)
+		err := file.ReadFromFile(config.FileStoragePath)
 		if err != nil {
 			logger.Logger.Errorf(err.Error(), "Can't read data from file:", config.FileStoragePath)
 		}
