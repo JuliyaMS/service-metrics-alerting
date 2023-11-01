@@ -11,7 +11,6 @@ import (
 )
 
 func main() {
-	logger.NewLogger()
 	config.GetServerConfig()
 	r := handlers.NewRouter()
 

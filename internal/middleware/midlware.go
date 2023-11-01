@@ -1,15 +1,49 @@
-package gzip
+package middleware
 
 import (
 	"fmt"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/gzip"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"net/http"
 	"strings"
+	"time"
 )
 
-func GzipCompression(h http.HandlerFunc) http.HandlerFunc {
+func LoggingServer(h http.HandlerFunc) http.HandlerFunc {
+	logFn := func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		uri := r.RequestURI
+		method := r.Method
+
+		responseData := &logger.DataResponse{
+			Status: 0,
+			Size:   0,
+		}
+
+		lw := logger.LoggingResponse{
+			ResponseWriter: w,
+			ResponseData:   responseData,
+		}
+
+		h.ServeHTTP(&lw, r)
+
+		duration := time.Since(start)
+
+		logger.Logger.Infoln(
+			"uri", uri,
+			"method", method,
+			"duration", duration,
+			"size", responseData.Size,
+			"status", responseData.Status,
+		)
+	}
+	return logFn
+}
+
+func CompressionGzip(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		logger.Logger.Infow("Start midlware")
+		logger.Logger.Infow("Start middleware")
 		ow := w
 
 		logger.Logger.Infow("Check client's Accept-Encoding")
@@ -19,10 +53,10 @@ func GzipCompression(h http.HandlerFunc) http.HandlerFunc {
 		if supportsGzip {
 			logger.Logger.Info("Start compress data")
 			fmt.Println(w.Header())
-			cw := newCompressWriter(w)
+			cw := gzip.NewCompressWriter(w)
 			ow = cw
 
-			defer func(cw *compressWriter) {
+			defer func(cw *gzip.CompressWriter) {
 				err := cw.Close()
 				if err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
@@ -36,7 +70,7 @@ func GzipCompression(h http.HandlerFunc) http.HandlerFunc {
 		sendsGzip := strings.Contains(contentEncoding, "gzip")
 		if sendsGzip {
 			logger.Logger.Infow("Read compress data")
-			cr, err := newCompressReader(r.Body)
+			cr, err := gzip.NewCompressReader(r.Body)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				logger.Logger.Error("Error while create compress reader:", err.Error())
@@ -44,7 +78,7 @@ func GzipCompression(h http.HandlerFunc) http.HandlerFunc {
 			}
 			r.Body = cr
 
-			defer func(cr *compressReader) {
+			defer func(cr *gzip.CompressReader) {
 				er := cr.Close()
 				if er != nil {
 					w.WriteHeader(http.StatusInternalServerError)
@@ -52,7 +86,7 @@ func GzipCompression(h http.HandlerFunc) http.HandlerFunc {
 				}
 			}(cr)
 		}
-		logger.Logger.Infow("End midlware")
+		logger.Logger.Infow("End middleware")
 		h.ServeHTTP(ow, r)
 	}
 }

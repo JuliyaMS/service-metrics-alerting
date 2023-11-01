@@ -61,7 +61,7 @@ func getEnvConfigAgent() {
 
 func GetAgentConfig() {
 
-	logger.Agent.Infow("Parse Agent config")
+	logger.Logger.Infow("Parse Agent config")
 
 	flag.StringVar(&FlagRunAgAddr, "a", ":8080", "address and port to run server")
 	flag.IntVar(&reportInterval, "r", 10, "time interval for generate metrics")

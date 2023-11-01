@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/file"
-	"github.com/JuliyaMS/service-metrics-alerting/internal/gzip"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/html"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
+	m "github.com/JuliyaMS/service-metrics-alerting/internal/middleware"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -244,13 +244,13 @@ func (h *Handlers) requestEmpty(w http.ResponseWriter, r *http.Request) {
 func routePost(r *chi.Mux, h *Handlers) {
 	logger.Logger.Infow("Init router for function Post")
 	r.Route("/update", func(r chi.Router) {
-		r.Post("/", logger.LoggingServer(gzip.GzipCompression(h.requestUpdate)))
+		r.Post("/", m.LoggingServer(m.CompressionGzip(h.requestUpdate)))
 		r.Route("/{type}", func(r chi.Router) {
-			r.Post("/", logger.LoggingServer(h.requestType))
+			r.Post("/", m.LoggingServer(h.requestType))
 			r.Route("/{name}", func(r chi.Router) {
-				r.Post("/", logger.LoggingServer(h.requestName))
+				r.Post("/", m.LoggingServer(h.requestName))
 				r.Route("/{value}", func(r chi.Router) {
-					r.Post("/", logger.LoggingServer(h.requestValue))
+					r.Post("/", m.LoggingServer(h.requestValue))
 				})
 			})
 		})
@@ -260,11 +260,11 @@ func routePost(r *chi.Mux, h *Handlers) {
 func routeGet(r *chi.Mux, h *Handlers) {
 	logger.Logger.Infow("Init router for function Get")
 	r.Route("/value", func(r chi.Router) {
-		r.Get("/", logger.LoggingServer(h.requestEmpty))
+		r.Get("/", m.LoggingServer(h.requestEmpty))
 		r.Route("/{type}", func(r chi.Router) {
-			r.Get("/", logger.LoggingServer(h.requestType))
+			r.Get("/", m.LoggingServer(h.requestType))
 			r.Route("/{name}", func(r chi.Router) {
-				r.Get("/", logger.LoggingServer(h.requestGetName))
+				r.Get("/", m.LoggingServer(h.requestGetName))
 			})
 		})
 	})
@@ -302,8 +302,8 @@ func NewRouter() *chi.Mux {
 	routePost(r, handlers)
 	routeGet(r, handlers)
 	logger.Logger.Infow("Init router another function")
-	r.Post("/value/", logger.LoggingServer(gzip.GzipCompression(handlers.requestGetValue)))
-	r.Get("/", logger.LoggingServer(gzip.GzipCompression(handlers.requestGetAll)))
+	r.Post("/value/", m.LoggingServer(m.CompressionGzip(handlers.requestGetValue)))
+	r.Get("/", m.LoggingServer(m.CompressionGzip(handlers.requestGetAll)))
 
 	return r
 }

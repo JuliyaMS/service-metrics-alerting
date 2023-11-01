@@ -1,11 +1,10 @@
-package requests
+package agent
 
 import (
 	"errors"
 	"fmt"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/handlers"
-	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
 	"github.com/stretchr/testify/assert"
 	"net/http/httptest"
@@ -14,7 +13,6 @@ import (
 )
 
 func TestSendRequest(t *testing.T) {
-	logger.NewLogger()
 	srv := httptest.NewServer(handlers.NewRouter())
 	defer srv.Close()
 
@@ -40,14 +38,14 @@ func TestSendRequest(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.nameTest, func(t *testing.T) {
 			config.FlagRunAgAddr = test.addr
-			fmt.Println(test.addr)
-			assert.Equal(t, test.want, SendRequest())
+			requestURL := fmt.Sprintf("http://%s/update/", config.FlagRunAgAddr)
+			a := NewAgent(requestURL, false)
+			assert.Equal(t, test.want, a.SendRequest())
 		})
 	}
 }
 
 func TestSendRequestJSON(t *testing.T) {
-	logger.NewLogger()
 	srv := httptest.NewServer(handlers.NewRouter())
 	defer srv.Close()
 
@@ -73,8 +71,9 @@ func TestSendRequestJSON(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.nameTest, func(t *testing.T) {
 			config.FlagRunAgAddr = test.addr
-			fmt.Println(test.addr)
-			assert.Equal(t, test.want, SendRequest())
+			requestURL := fmt.Sprintf("http://%s/update/", config.FlagRunAgAddr)
+			a := NewAgent(requestURL, true)
+			assert.Equal(t, test.want, a.SendRequestJSON())
 		})
 	}
 }
