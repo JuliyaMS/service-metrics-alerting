@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
-	"github.com/JuliyaMS/service-metrics-alerting/internal/gzip"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/file"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/html"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
+	m "github.com/JuliyaMS/service-metrics-alerting/internal/middleware"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -35,8 +37,11 @@ func (h *Handlers) requestValue(w http.ResponseWriter, r *http.Request) {
 	metricName := chi.URLParam(r, "name")
 	metricValue := chi.URLParam(r, "value")
 
-	w.WriteHeader(h.memStor.Add(metricType, metricName, metricValue))
-
+	if err := h.memStor.Add(metricType, metricName, metricValue); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *Handlers) requestName(w http.ResponseWriter, r *http.Request) {
@@ -141,12 +146,19 @@ func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.MType == "gauge" {
 		logger.Logger.Infow("Update gauge metric", "name", req.ID, "value", *req.Value)
-		w.WriteHeader(h.memStor.Add(req.MType, req.ID, strconv.FormatFloat(*req.Value, 'g', -1, 64)))
+		if err := h.memStor.Add(req.MType, req.ID, strconv.FormatFloat(*req.Value, 'g', -1, 64)); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 	}
 
 	if req.MType == "counter" {
 		logger.Logger.Infow("Update counter metric", "name", req.ID, "value", *req.Delta)
-		w.WriteHeader(h.memStor.Add(req.MType, req.ID, strconv.FormatInt(*req.Delta, 10)))
+		if err := h.memStor.Add(req.MType, req.ID, strconv.FormatInt(*req.Delta, 10)); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+
+		}
 		newDelta, err := strconv.ParseInt(h.memStor.Get("counter", req.ID), 10, 64)
 		if err != nil {
 			logger.Logger.Error("cannot write new Delta", zap.Error(err))
@@ -156,6 +168,7 @@ func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 		req.Delta = &newDelta
 	}
 
+	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 	logger.Logger.Infow("Encode data for response")
 	enc := json.NewEncoder(w)
@@ -231,13 +244,13 @@ func (h *Handlers) requestEmpty(w http.ResponseWriter, r *http.Request) {
 func routePost(r *chi.Mux, h *Handlers) {
 	logger.Logger.Infow("Init router for function Post")
 	r.Route("/update", func(r chi.Router) {
-		r.Post("/", logger.LoggingServer(gzip.GzipCompression(h.requestUpdate)))
+		r.Post("/", m.LoggingServer(m.CompressionGzip(h.requestUpdate)))
 		r.Route("/{type}", func(r chi.Router) {
-			r.Post("/", logger.LoggingServer(h.requestType))
+			r.Post("/", m.LoggingServer(h.requestType))
 			r.Route("/{name}", func(r chi.Router) {
-				r.Post("/", logger.LoggingServer(h.requestName))
+				r.Post("/", m.LoggingServer(h.requestName))
 				r.Route("/{value}", func(r chi.Router) {
-					r.Post("/", logger.LoggingServer(h.requestValue))
+					r.Post("/", m.LoggingServer(h.requestValue))
 				})
 			})
 		})
@@ -247,11 +260,11 @@ func routePost(r *chi.Mux, h *Handlers) {
 func routeGet(r *chi.Mux, h *Handlers) {
 	logger.Logger.Infow("Init router for function Get")
 	r.Route("/value", func(r chi.Router) {
-		r.Get("/", logger.LoggingServer(h.requestEmpty))
+		r.Get("/", m.LoggingServer(h.requestEmpty))
 		r.Route("/{type}", func(r chi.Router) {
-			r.Get("/", logger.LoggingServer(h.requestType))
+			r.Get("/", m.LoggingServer(h.requestType))
 			r.Route("/{name}", func(r chi.Router) {
-				r.Get("/", logger.LoggingServer(h.requestGetName))
+				r.Get("/", m.LoggingServer(h.requestGetName))
 			})
 		})
 	})
@@ -259,14 +272,22 @@ func routeGet(r *chi.Mux, h *Handlers) {
 
 func NewRouter() *chi.Mux {
 	logger.Logger.Infow("Init router and handlers")
-	handlers := NewHandlers(&storage.MemStorage{})
+	if config.Restore {
+		logger.Logger.Info("Restore data from file:", config.FileStoragePath)
+		err := file.ReadFromFile(config.FileStoragePath)
+		if err != nil {
+			logger.Logger.Errorf(err.Error(), "Can't read data from file:", config.FileStoragePath)
+		}
+	}
+	handlers := NewHandlers(&storage.Storage)
 	handlers.memStor.Init()
 
 	r := chi.NewRouter()
 	routePost(r, handlers)
 	routeGet(r, handlers)
 	logger.Logger.Infow("Init router another function")
-	r.Post("/value/", logger.LoggingServer(gzip.GzipCompression(handlers.requestGetValue)))
-	r.Get("/", logger.LoggingServer(gzip.GzipCompression(handlers.requestGetAll)))
+	r.Post("/value/", m.LoggingServer(m.CompressionGzip(handlers.requestGetValue)))
+	r.Get("/", m.LoggingServer(m.CompressionGzip(handlers.requestGetAll)))
+
 	return r
 }

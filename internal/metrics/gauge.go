@@ -11,18 +11,18 @@ type Gauge struct {
 }
 
 type GaugeMetrics struct {
-	metrics map[string]float64
+	Metrics map[string]float64
 }
 
 func (g *GaugeMetrics) Init() {
-	if g.metrics == nil {
-		g.metrics = make(map[string]float64)
+	if g.Metrics == nil {
+		g.Metrics = make(map[string]float64)
 	}
 }
 
 func (g *GaugeMetrics) Add(name string, val string) bool {
 	if value, err := strconv.ParseFloat(val, 64); err == nil {
-		g.metrics[name] = value
+		g.Metrics[name] = value
 		g.Print()
 		return true
 	}
@@ -31,7 +31,7 @@ func (g *GaugeMetrics) Add(name string, val string) bool {
 
 func (g *GaugeMetrics) Get(name string) string {
 
-	if val, ok := g.metrics[name]; ok {
+	if val, ok := g.Metrics[name]; ok {
 		return strconv.FormatFloat(val, 'f', -1, 64)
 	} else {
 		return "-1"
@@ -39,9 +39,9 @@ func (g *GaugeMetrics) Get(name string) string {
 }
 
 func (g *GaugeMetrics) Print() {
-	fmt.Println(g.metrics)
+	fmt.Println(g.Metrics)
 }
 
 func (g *GaugeMetrics) ReturnValues() map[string]float64 {
-	return g.metrics
+	return g.Metrics
 }

@@ -1,17 +1,21 @@
 package main
 
 import (
+	"fmt"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/agent"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
-	"github.com/JuliyaMS/service-metrics-alerting/internal/requests"
 	"runtime"
 	"time"
 )
 
 func main() {
-	logger.NewLoggerAgent()
 	config.GetAgentConfig()
+
+	requestURL := fmt.Sprintf("http://%s/update/", config.FlagRunAgAddr)
+	agent := agent.NewAgent(requestURL, true)
+
 	var rtm runtime.MemStats
 	ticker := time.NewTicker(config.TimeInterval)
 	ticker2 := time.NewTicker(config.TimeInterval2)
@@ -24,11 +28,11 @@ func main() {
 			case <-tickerChan:
 				return
 			case tm := <-ticker.C:
-				logger.Agent.Infow("Change metrics", "time", tm)
+				logger.Logger.Infow("Change metrics", "time", tm)
 				metrics.ChangeMetrics(&rtm)
 			case tm2 := <-ticker2.C:
-				logger.Agent.Infow("Send metrics", "time", tm2)
-				err := requests.SendRequestJSON()
+				logger.Logger.Infow("Send metrics", "time", tm2)
+				err := agent.SendRequestJSON()
 				if err != nil {
 					panic(err)
 				}

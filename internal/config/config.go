@@ -1,77 +1,75 @@
 package config
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 )
 
 var FlagRunSerAddr string
-var CountIteration int64
 var FlagRunAgAddr string
 var TimeInterval time.Duration
 var TimeInterval2 time.Duration
+var StoreInterval time.Duration
 var reportInterval int
 var pollInterval int
+var saveInterval int
+var FileStoragePath string
+var Restore bool
 
-func getEnvConfig() {
+func getEnvConfigServer() {
+	if envRunSerAddr := os.Getenv("ADDRESS"); envRunSerAddr != "" {
+		FlagRunSerAddr = envRunSerAddr
+	}
+	if envSaveInterval := os.Getenv("STORE_INTERVAL"); envSaveInterval != "" {
+		if inter, err := strconv.Atoi(envSaveInterval); err == nil {
+			saveInterval = inter
+			fmt.Println(inter)
+		}
+
+	}
+	if envPath := os.Getenv("FILE_STORAGE_PATH"); envPath != "" {
+		FileStoragePath = envPath
+	}
+	if envRestore := os.Getenv("RESTORE"); envRestore != "" {
+		if fl, err := strconv.ParseBool(envRestore); err == nil {
+			Restore = fl
+		}
+
+	}
+}
+
+func getEnvConfigAgent() {
 	if envRunAgAddr := os.Getenv("ADDRESS"); envRunAgAddr != "" {
 		FlagRunAgAddr = envRunAgAddr
 	}
 	if envReportInterval := os.Getenv("REPORT_INTERVAL"); envReportInterval != "" {
-		if inter, err := strconv.Atoi(string(envReportInterval[0])); err != nil {
+		if inter, err := strconv.Atoi(envReportInterval); err == nil {
 			reportInterval = inter
 		}
 
 	}
 	if envPollInterval := os.Getenv("POLL_INTERVAL"); envPollInterval != "" {
-		if poll, err := strconv.Atoi(string(envPollInterval[0])); err != nil {
+		if poll, err := strconv.Atoi(envPollInterval); err == nil {
 			pollInterval = poll
 		}
 	}
 }
 
-func checkFlagsServer() error {
-	flags := os.Args[1:]
-	if len(flags) > 0 {
-		if len(flags) != 1 {
-			return errors.New("incorrect count of command line arguments")
-		} else {
-			data := strings.Split(flags[0], "=")
-			if data[0] != "-a" {
-				return errors.New("incorrect flag's name")
-			}
-			if !checkFlagAddr(data[1]) {
-				return errors.New("adress is not correct. Need address in a form host:port")
-			}
-		}
-
-	}
-	return nil
-}
-
 func GetAgentConfig() {
 
-	logger.Agent.Infow("Parse Agent config")
+	logger.Logger.Infow("Parse Agent config")
 
 	flag.StringVar(&FlagRunAgAddr, "a", ":8080", "address and port to run server")
 	flag.IntVar(&reportInterval, "r", 10, "time interval for generate metrics")
 	flag.IntVar(&pollInterval, "p", 2, "time interval for send request to server")
-	if err := checkFlagsAgent(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		flag.Usage()
-		os.Exit(1)
-	}
 
 	flag.Parse()
-	getEnvConfig()
+	getEnvConfigAgent()
 
-	CountIteration = int64(reportInterval / pollInterval)
 	TimeInterval = time.Duration(pollInterval) * time.Second
 	TimeInterval2 = time.Duration(reportInterval) * time.Second
 }
@@ -81,12 +79,12 @@ func GetServerConfig() {
 	logger.Logger.Infow("Parse Server config")
 
 	flag.StringVar(&FlagRunSerAddr, "a", ":8080", "address and port to run server")
-	if err := checkFlagsServer(); err != nil {
-		flag.Usage()
-		logger.Logger.Fatalf(err.Error(), "event", "get server config")
-	}
-	if envRunAgAddr := os.Getenv("ADDRESS"); envRunAgAddr != "" {
-		FlagRunSerAddr = envRunAgAddr
-	}
+	flag.IntVar(&saveInterval, "i", 300, "time interval to save metrics in file")
+	flag.StringVar(&FileStoragePath, "f", "/tmp/metrics-db.json", "path to save file")
+	flag.BoolVar(&Restore, "r", true, "restore data from file or not")
+
 	flag.Parse()
+	getEnvConfigServer()
+
+	StoreInterval = time.Duration(saveInterval) * time.Second
 }
