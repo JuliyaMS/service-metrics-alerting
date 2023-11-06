@@ -2,8 +2,10 @@ package requests
 
 import (
 	"errors"
+	"fmt"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/handlers"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
 	"github.com/stretchr/testify/assert"
 	"net/http/httptest"
@@ -14,6 +16,7 @@ import (
 func TestSendRequest(t *testing.T) {
 	srv := httptest.NewServer(handlers.NewRouter())
 	defer srv.Close()
+	logger.NewLogger()
 
 	var rtm runtime.MemStats
 	metrics.ChangeMetrics(&rtm)
@@ -37,6 +40,7 @@ func TestSendRequest(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.nameTest, func(t *testing.T) {
 			config.FlagRunAgAddr = test.addr
+			fmt.Println(test.addr)
 			assert.Equal(t, test.want, SendRequest())
 		})
 	}
