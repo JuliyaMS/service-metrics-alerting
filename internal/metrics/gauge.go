@@ -23,6 +23,7 @@ func (g *GaugeMetrics) Init() {
 func (g *GaugeMetrics) Add(name string, val string) bool {
 	if value, err := strconv.ParseFloat(val, 64); err == nil {
 		g.metrics[name] = value
+		g.Print()
 		return true
 	}
 	return false

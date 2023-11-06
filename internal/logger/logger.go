@@ -7,6 +7,7 @@ import (
 )
 
 var Logger zap.SugaredLogger
+var Agent zap.SugaredLogger
 
 type dataResponse struct {
 	status int
@@ -69,4 +70,14 @@ func NewLogger() {
 	defer logger.Sync()
 
 	Logger = *logger.Sugar()
+}
+
+func NewLoggerAgent() {
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		panic(err)
+	}
+	defer logger.Sync()
+
+	Agent = *logger.Sugar()
 }

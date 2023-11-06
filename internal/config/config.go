@@ -12,9 +12,10 @@ import (
 )
 
 var FlagRunSerAddr string
-var CountIteration uint64
+var CountIteration int64
 var FlagRunAgAddr string
 var TimeInterval time.Duration
+var TimeInterval2 time.Duration
 var reportInterval int
 var pollInterval int
 
@@ -56,6 +57,8 @@ func checkFlagsServer() error {
 
 func GetAgentConfig() {
 
+	logger.Agent.Infow("Parse Agent config")
+
 	flag.StringVar(&FlagRunAgAddr, "a", ":8080", "address and port to run server")
 	flag.IntVar(&reportInterval, "r", 10, "time interval for generate metrics")
 	flag.IntVar(&pollInterval, "p", 2, "time interval for send request to server")
@@ -68,11 +71,15 @@ func GetAgentConfig() {
 	flag.Parse()
 	getEnvConfig()
 
-	CountIteration = uint64(reportInterval / pollInterval)
+	CountIteration = int64(reportInterval / pollInterval)
 	TimeInterval = time.Duration(pollInterval) * time.Second
+	TimeInterval2 = time.Duration(reportInterval) * time.Second
 }
 
 func GetServerConfig() {
+
+	logger.Logger.Infow("Parse Server config")
+
 	flag.StringVar(&FlagRunSerAddr, "a", ":8080", "address and port to run server")
 	if err := checkFlagsServer(); err != nil {
 		flag.Usage()
