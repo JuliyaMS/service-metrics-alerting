@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
@@ -31,8 +32,10 @@ func TestRouter(t *testing.T) {
 	logger.NewLogger()
 	ts := httptest.NewServer(NewRouter())
 	defer ts.Close()
+
 	randomValues := []float64{127.765, 154789.33200}
 	randomDeltas := []int64{657, 325}
+
 	tests := []struct {
 		nameTest string
 		method   string
@@ -148,4 +151,67 @@ func TestRouter(t *testing.T) {
 		assert.Equal(t, test.want, get)
 		resp.Body.Close()
 	}
+	requestBodyUpdate := `{
+            "ID": "TestCounterMetric",
+            "type": "counter",
+			"Delta": 1234
+        }`
+
+	// ожидаемое содержимое тела ответа при успешном запросе
+	successBody := `{
+            "id": "TestCounterMetric",
+            "type": "counter",
+			"delta": 1234
+        }`
+
+	requestBodyValue := `{
+            "ID": "TestCounterMetric",
+            "type": "counter"
+        }`
+
+	tr := &http.Transport{DisableCompression: true}
+	client := http.Client{Transport: tr}
+	t.Run("Sends_gzip_update", func(t *testing.T) {
+		buf := bytes.NewBuffer(nil)
+		zb := gzip.NewWriter(buf)
+		_, err := zb.Write([]byte(requestBodyUpdate))
+		require.NoError(t, err)
+		err = zb.Close()
+		require.NoError(t, err)
+
+		r := httptest.NewRequest("POST", ts.URL+"/update/", buf)
+		r.RequestURI = ""
+		r.Header.Set("Content-Encoding", "gzip")
+
+		resp, err := client.Do(r)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		defer resp.Body.Close()
+
+		b, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		require.JSONEq(t, successBody, string(b))
+	})
+
+	t.Run("Accepts_gzip_value", func(t *testing.T) {
+		buf := bytes.NewBufferString(requestBodyValue)
+		r := httptest.NewRequest("POST", ts.URL+"/value/", buf)
+		r.RequestURI = ""
+		r.Header.Set("Accept-Encoding", "gzip")
+
+		resp, err := http.DefaultClient.Do(r)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		defer resp.Body.Close()
+
+		zr, err := gzip.NewReader(resp.Body)
+		require.NoError(t, err)
+
+		b, err := io.ReadAll(zr)
+		require.NoError(t, err)
+
+		require.JSONEq(t, successBody, string(b))
+	})
 }
