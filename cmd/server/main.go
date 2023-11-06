@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/database"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/file"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/handlers"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
@@ -12,7 +13,8 @@ import (
 
 func main() {
 	config.GetServerConfig()
-	r := handlers.NewRouter()
+	DBConn := database.NewConnectionDB()
+	r := handlers.NewRouter(DBConn)
 
 	var waitGroup sync.WaitGroup
 	waitGroup.Add(1)
@@ -42,5 +44,12 @@ func main() {
 	}()
 
 	waitGroup.Wait()
+
+	if DBConn != nil {
+		logger.Logger.Info("close connection to Database")
+		if err := DBConn.Close(); err != nil {
+			logger.Logger.Error("get error while close connection to Database:", err.Error())
+		}
+	}
 
 }
