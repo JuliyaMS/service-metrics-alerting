@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/database"
@@ -12,23 +11,19 @@ import (
 	m "github.com/JuliyaMS/service-metrics-alerting/internal/middleware"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/storage"
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 	"html/template"
 	"net/http"
 	"strconv"
-	"time"
 )
 
 type Handlers struct {
 	memStor storage.Repositories
-	Conn    *pgx.Conn
 }
 
-func NewHandlers(stor storage.Repositories, conn *pgx.Conn) *Handlers {
+func NewHandlers(stor storage.Repositories) *Handlers {
 	return &Handlers{
 		memStor: stor,
-		Conn:    conn,
 	}
 }
 
@@ -187,7 +182,6 @@ func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 		logger.Logger.Error("error encoding response", zap.Error(err))
 		return
 	}
-	w.WriteHeader(http.StatusOK)
 	logger.Logger.Infow("sending HTTP 200 response")
 }
 
@@ -252,15 +246,10 @@ func (h *Handlers) requestEmpty(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusBadRequest)
 }
 
-func (h *Handlers) PingBD(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) PingDB(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("start handler: PingDB")
 
-	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
-	defer cancel()
-
-	logger.Logger.Info("check connection to Database")
-	err := h.Conn.Ping(ctx)
-	if err != nil {
+	if err := h.memStor.CheckConnection(); err != nil {
 		logger.Logger.Error("get error while check connection to Database:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -268,6 +257,34 @@ func (h *Handlers) PingBD(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	logger.Logger.Info("sending HTTP 200 response")
+}
+
+func (h *Handlers) UpdatesDB(w http.ResponseWriter, r *http.Request) {
+	logger.Logger.Info("start handler: UpdatesDB")
+
+	if r.Method != http.MethodPost {
+		logger.Logger.Debug("got request with bad method", zap.String("method", r.Method))
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	logger.Logger.Infow("decoding request")
+	var req []metrics.Metrics
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&req); err != nil {
+		logger.Logger.Error("cannot decode request JSON body", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.memStor.AddAnyData(req); err != nil {
+		logger.Logger.Error("Get error while execute transaction:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	logger.Logger.Infow("sending HTTP 200 response")
 }
 
 func routePost(r *chi.Mux, h *Handlers) {
@@ -310,10 +327,10 @@ func NewRouter(DBConn *database.ConnectionDB) *chi.Mux {
 	}
 
 	var handlers *Handlers
-	if DBConn != nil {
-		handlers = NewHandlers(DBConn, DBConn.Conn)
+	if config.DatabaseDsn != "" {
+		handlers = NewHandlers(DBConn)
 	} else {
-		handlers = NewHandlers(&storage.Storage, nil)
+		handlers = NewHandlers(&storage.Storage)
 	}
 	handlers.memStor.Init()
 
@@ -324,12 +341,9 @@ func NewRouter(DBConn *database.ConnectionDB) *chi.Mux {
 
 	logger.Logger.Infow("init router another function")
 	r.Post("/value/", m.LoggingServer(m.CompressionGzip(handlers.requestGetValue)))
+	r.Post("/updates/", m.LoggingServer(m.CompressionGzip(handlers.UpdatesDB)))
 	r.Get("/", m.LoggingServer(m.CompressionGzip(handlers.requestGetAll)))
-
-	if DBConn != nil {
-		logger.Logger.Infow("create handler PingDB")
-		r.Get("/ping", m.LoggingServer(handlers.PingBD))
-	}
+	r.Get("/ping", m.LoggingServer(handlers.PingDB))
 
 	return r
 }

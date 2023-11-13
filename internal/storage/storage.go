@@ -3,6 +3,7 @@ package storage
 import (
 	"errors"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
+	"strconv"
 )
 
 var Storage MemStorage
@@ -12,6 +13,8 @@ type Repositories interface {
 	Add(t, name, val string) error
 	Get(tp, name string) string
 	GetAll() (metrics.GaugeMetrics, metrics.CounterMetrics)
+	CheckConnection() error
+	AddAnyData(req []metrics.Metrics) error
 }
 
 type MemStorage struct {
@@ -55,4 +58,31 @@ func (s MemStorage) Get(tp, name string) string {
 
 func (s *MemStorage) GetAll() (metrics.GaugeMetrics, metrics.CounterMetrics) {
 	return s.MetricsGauge, s.MetricsCounter
+}
+
+func (s *MemStorage) CheckConnection() error {
+	if s.MetricsGauge.Metrics != nil && s.MetricsCounter.Metrics != nil {
+		return nil
+	}
+	return errors.New("storage for metrics isn`t initialize")
+}
+
+func (s *MemStorage) AddAnyData(req []metrics.Metrics) error {
+
+	for _, r := range req {
+		if r.MType == "gauge" {
+			value := strconv.FormatFloat(*r.Value, 'g', -1, 64)
+			if err := s.Add(r.MType, r.ID, value); err != nil {
+				return err
+			}
+		}
+		if r.MType == "counter" {
+			value := strconv.FormatInt(*r.Delta, 10)
+			if err := s.Add(r.MType, r.ID, value); err != nil {
+				return err
+			}
+		}
+
+	}
+	return nil
 }

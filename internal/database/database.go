@@ -15,6 +15,10 @@ type ConnectionDB struct {
 }
 
 func NewConnectionDB() *ConnectionDB {
+	if config.DatabaseDsn == "" {
+		return nil
+	}
+
 	logger.Logger.Info("create context with timeout")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -31,6 +35,19 @@ func NewConnectionDB() *ConnectionDB {
 	return &ConnectionDB{
 		Conn: conn,
 	}
+}
+
+func (db *ConnectionDB) CheckConnection() error {
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	logger.Logger.Info("check connection to Database")
+	err := db.Conn.Ping(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (db *ConnectionDB) Init() {
@@ -189,6 +206,46 @@ func (db *ConnectionDB) getAllCountMetrics() metrics.CounterMetrics {
 
 func (db *ConnectionDB) GetAll() (metrics.GaugeMetrics, metrics.CounterMetrics) {
 	return db.getAllGaugeMetrics(), db.getAllCountMetrics()
+}
+
+func (db *ConnectionDB) AddAnyData(req []metrics.Metrics) error {
+
+	logger.Logger.Infow("Start transaction")
+	tx, err := db.Conn.Begin(context.Background())
+	if err != nil {
+		return err
+	}
+	for _, el := range req {
+		if el.MType == "counter" {
+
+			sql := "INSERT INTO count_metrics (Name, Value) VALUES ($1, $2)" +
+				"ON CONFLICT (Name) DO UPDATE SET Value = count_metrics.Value + $2;"
+
+			logger.Logger.Info("Execute request to add counter metric")
+			_, err = tx.Exec(context.Background(), sql, el.ID, el.Delta)
+		} else {
+			sql := "INSERT INTO gauge_metrics (Name, Value) VALUES ($1, $2)" +
+				"ON CONFLICT (Name) DO UPDATE SET Value = $2;"
+
+			logger.Logger.Info("Execute request to add gauge metric")
+			_, err = tx.Exec(context.Background(), sql, el.ID, el.Value)
+		}
+
+		if err != nil {
+			tx.Rollback(context.Background())
+			return err
+		}
+		logger.Logger.Info("Execute successful")
+
+	}
+
+	logger.Logger.Info("Close transaction")
+	if err = tx.Commit(context.Background()); err != nil {
+		return err
+	}
+
+	logger.Logger.Info("All data added successful")
+	return nil
 }
 
 func (db *ConnectionDB) Close() error {
