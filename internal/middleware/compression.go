@@ -1,44 +1,71 @@
 package middleware
 
 import (
+	"compress/gzip"
 	"fmt"
-	"github.com/JuliyaMS/service-metrics-alerting/internal/gzip"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
+	"io"
 	"net/http"
 	"strings"
-	"time"
 )
 
-func LoggingServer(h http.HandlerFunc) http.HandlerFunc {
-	logFn := func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
+type CompressWriter struct {
+	res http.ResponseWriter
+	zw  *gzip.Writer
+}
 
-		uri := r.RequestURI
-		method := r.Method
-
-		responseData := &logger.DataResponse{
-			Status: 0,
-			Size:   0,
-		}
-
-		lw := logger.LoggingResponse{
-			ResponseWriter: w,
-			ResponseData:   responseData,
-		}
-
-		h.ServeHTTP(&lw, r)
-
-		duration := time.Since(start)
-
-		logger.Logger.Infoln(
-			"uri", uri,
-			"method", method,
-			"duration", duration,
-			"size", responseData.Size,
-			"status", responseData.Status,
-		)
+func NewCompressWriter(w http.ResponseWriter) *CompressWriter {
+	return &CompressWriter{
+		res: w,
+		zw:  gzip.NewWriter(w),
 	}
-	return logFn
+}
+
+type CompressReader struct {
+	r  io.ReadCloser
+	zr *gzip.Reader
+}
+
+func NewCompressReader(r io.ReadCloser) (*CompressReader, error) {
+	zr, err := gzip.NewReader(r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &CompressReader{
+		r:  r,
+		zr: zr,
+	}, nil
+}
+
+func (c *CompressWriter) Header() http.Header {
+	return c.res.Header()
+}
+
+func (c *CompressWriter) Write(p []byte) (int, error) {
+	return c.zw.Write(p)
+}
+
+func (c *CompressWriter) WriteHeader(statusCode int) {
+	if statusCode < 300 {
+		c.res.Header().Set("Content-Encoding", "gzip")
+	}
+	c.res.WriteHeader(statusCode)
+}
+
+func (c *CompressWriter) Close() error {
+	return c.zw.Close()
+}
+
+func (c CompressReader) Read(p []byte) (n int, err error) {
+	return c.zr.Read(p)
+}
+
+func (c *CompressReader) Close() error {
+	if err := c.r.Close(); err != nil {
+		return err
+	}
+	return c.zr.Close()
 }
 
 func CompressionGzip(h http.HandlerFunc) http.HandlerFunc {
@@ -53,10 +80,10 @@ func CompressionGzip(h http.HandlerFunc) http.HandlerFunc {
 		if supportsGzip {
 			logger.Logger.Info("Start compress data")
 			fmt.Println(w.Header())
-			cw := gzip.NewCompressWriter(w)
+			cw := NewCompressWriter(w)
 			ow = cw
 
-			defer func(cw *gzip.CompressWriter) {
+			defer func(cw *CompressWriter) {
 				err := cw.Close()
 				if err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
@@ -70,7 +97,7 @@ func CompressionGzip(h http.HandlerFunc) http.HandlerFunc {
 		sendsGzip := strings.Contains(contentEncoding, "gzip")
 		if sendsGzip {
 			logger.Logger.Infow("Read compress data")
-			cr, err := gzip.NewCompressReader(r.Body)
+			cr, err := NewCompressReader(r.Body)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				logger.Logger.Error("Error while create compress reader:", err.Error())
@@ -78,7 +105,7 @@ func CompressionGzip(h http.HandlerFunc) http.HandlerFunc {
 			}
 			r.Body = cr
 
-			defer func(cr *gzip.CompressReader) {
+			defer func(cr *CompressReader) {
 				er := cr.Close()
 				if er != nil {
 					w.WriteHeader(http.StatusInternalServerError)
