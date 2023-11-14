@@ -94,8 +94,8 @@ func (a *Agent) sendRequestGaugeJSON() error {
 				return errors.New("compress data failed")
 			}
 		}
-
 		a.logger.Infow("Send gauge metric", "addr", config.FlagRunAgAddr, "data", data)
+		attempt := 0
 		err = retry.Do(func() error {
 			var er error
 			r, _ := http.NewRequest("POST", a.URL, data)
@@ -112,8 +112,10 @@ func (a *Agent) sendRequestGaugeJSON() error {
 			}
 			return er
 		},
-			retry.Attempts(10),
+			retry.Attempts(3),
 			retry.OnRetry(func(n uint, err error) {
+				time.Sleep(time.Duration(1 + 2*attempt))
+				attempt += 1
 				a.logger.Info("Retrying request after error: %v", err)
 			}))
 
@@ -152,6 +154,7 @@ func (a *Agent) sendRequestCounterJSON() error {
 	}
 
 	a.logger.Infow("Send counter metric", "addr", config.FlagRunAgAddr, "data", data)
+	attempt := 0
 	err = retry.Do(func() error {
 		r, _ := http.NewRequest("POST", a.URL, data)
 		r.Header.Set("Content-Type", "application/json")
@@ -167,8 +170,13 @@ func (a *Agent) sendRequestCounterJSON() error {
 		}
 		return er
 	},
-		retry.Attempts(10),
-		retry.OnRetry(func(n uint, err error) { a.logger.Info("Retrying request after error: %v", err) }))
+		retry.Attempts(3),
+		retry.OnRetry(func(n uint, err error) {
+			time.Sleep(time.Duration(1 + 2*attempt))
+			attempt += 1
+			a.logger.Info("Retrying request after error: %v", err)
+
+		}))
 
 	if err != nil {
 		a.logger.Error(err.Error(), "event", "send request")
@@ -226,7 +234,7 @@ func (a *Agent) SendBatchDataJSON() error {
 			return errors.New("compress data failed")
 		}
 	}
-
+	attempt := 0
 	a.logger.Infow("Send all metrics", "addr", config.FlagRunAgAddr, "data", data)
 	err = retry.Do(func() error {
 		r, _ := http.NewRequest("POST", a.URL, data)
@@ -243,8 +251,12 @@ func (a *Agent) SendBatchDataJSON() error {
 		}
 		return er
 	},
-		retry.Attempts(10),
-		retry.OnRetry(func(n uint, err error) { a.logger.Info("Retrying request after error: %v", err) }))
+		retry.Attempts(3),
+		retry.OnRetry(func(n uint, err error) {
+			time.Sleep(time.Duration(1 + 2*attempt))
+			attempt += 1
+			a.logger.Info("Retrying request after error: %v", err)
+		}))
 
 	if err != nil {
 		a.logger.Error(err.Error(), "event", "send request")
