@@ -64,6 +64,8 @@ func (h *Handlers) requestName(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) requestGetName(w http.ResponseWriter, r *http.Request) {
 
+	logger.Logger.Info("Start handler:requestGetName")
+
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -72,14 +74,16 @@ func (h *Handlers) requestGetName(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
 	metricName := chi.URLParam(r, "name")
 
+	logger.Logger.Info("Get value from memStor")
 	value := h.memStor.Get(metricType, metricName)
 
 	if value != "-1" {
+		logger.Logger.Info("Get value: ", value, " for metric: ", metricName)
 		w.Write([]byte(value))
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-
+	logger.Logger.Info("Metric with this name don`t found")
 	w.WriteHeader(http.StatusNotFound)
 
 }
