@@ -62,7 +62,9 @@ func (db *ConnectionDB) Init() {
 	sql := "CREATE TABLE IF NOT EXISTS gauge_metrics(Name varchar(100) PRIMARY KEY, Value double precision NOT NULL);" +
 		"CREATE TABLE IF NOT EXISTS count_metrics(Name varchar(100) PRIMARY KEY, Value bigint NOT NULL);"
 
+
 	_, errEx := db.Conn.Exec(ctx, sql)
+
 
 	if errEx != nil {
 		logger.Logger.Info("Error while create table gauge_metrics: ", errEx.Error())
@@ -250,6 +252,7 @@ func (db *ConnectionDB) Close() error {
 	}
 	return nil
 }
+
 
 func Retry(attempts int, sleep time.Duration, f interface{}, ctx context.Context, sql string, val1 any, val2 any) (err error) {
 	logger.Logger.Info("Start retry function")
