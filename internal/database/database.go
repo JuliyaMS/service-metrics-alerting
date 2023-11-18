@@ -55,16 +55,22 @@ func (db *ConnectionDB) CheckConnection() error {
 
 func (db *ConnectionDB) Init() {
 
+	logger.Logger.Info("Start creation tables for metrics")
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*200)
 	defer cancel()
+	sql := "CREATE TABLE IF NOT EXISTS gauge_metrics(Name varchar(100) PRIMARY KEY, Value double precision NOT NULL);" +
+		"CREATE TABLE IF NOT EXISTS count_metrics(Name varchar(100) PRIMARY KEY, Value bigint NOT NULL);"
 
-	errEx := Retry(4, time.Duration(1), db.Conn.Exec, ctx, "CREATE TABLE IF NOT EXISTS gauge_metrics(Name varchar(100) PRIMARY KEY, Value double precision NOT NULL);"+
-		"CREATE TABLE IF NOT EXISTS count_metrics(Name varchar(100) PRIMARY KEY, Value bigint NOT NULL);", "", 0)
+
+	_, errEx := db.Conn.Exec(ctx, sql)
+
 
 	if errEx != nil {
-		logger.Logger.Info("Error while create tables:", errEx.Error())
+		logger.Logger.Info("Error while create table gauge_metrics: ", errEx.Error())
 		return
 	}
+
 }
 
 func (db *ConnectionDB) Add(t, name, val string) error {
@@ -247,7 +253,8 @@ func (db *ConnectionDB) Close() error {
 	return nil
 }
 
-func Retry(attempts int, sleep time.Duration, f interface{}, ctx context.Context, sql string, name string, value any) (err error) {
+
+func Retry(attempts int, sleep time.Duration, f interface{}, ctx context.Context, sql string, val1 any, val2 any) (err error) {
 	logger.Logger.Info("Start retry function")
 	for i := 0; ; i++ {
 		logger.Logger.Info("Execute function, attempt:", i+1)
@@ -257,7 +264,7 @@ func Retry(attempts int, sleep time.Duration, f interface{}, ctx context.Context
 			err = f.(func(context.Context) error)(ctx)
 		case func(context.Context, string, ...any) (pgconn.CommandTag, error):
 			logger.Logger.Info("Function type:", t)
-			_, err = f.(func(context.Context, string, ...any) (pgconn.CommandTag, error))(ctx, sql, name, value)
+			_, err = f.(func(context.Context, string, ...any) (pgconn.CommandTag, error))(ctx, sql, val1, val2)
 		}
 		if err != nil {
 			logger.Logger.Info("Check type of error")
