@@ -12,6 +12,7 @@ import (
 	m "github.com/JuliyaMS/service-metrics-alerting/internal/middleware"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/storage"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 	"html/template"
 	"net/http"
@@ -21,13 +22,13 @@ import (
 
 type Handlers struct {
 	memStor storage.Repositories
-	DB      *database.ConnectionDB
+	Conn    *pgx.Conn
 }
 
-func NewHandlers(stor storage.Repositories, conn *database.ConnectionDB) *Handlers {
+func NewHandlers(stor storage.Repositories, conn *pgx.Conn) *Handlers {
 	return &Handlers{
 		memStor: stor,
-		DB:      conn,
+		Conn:    conn,
 	}
 }
 
@@ -103,11 +104,16 @@ func (h *Handlers) requestGetAll(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	logger.Logger.Infow("Open file with html table")
-	tmpl, _ := template.ParseFiles("./data/html/index.html")
+
+	tmpl, err := template.ParseFiles("./data/html/index.html")
+	if err != nil {
+		logger.Logger.Error("Error while parse html file: ", err)
+		return
+	}
 
 	logger.Logger.Infow("Execute for gauge metrics")
 
-	err := tmpl.Execute(w, dataGauge)
+	err = tmpl.Execute(w, dataGauge)
 	if err != nil {
 		logger.Logger.Error("Error while execute for gauge metrics", err)
 		return
@@ -249,11 +255,11 @@ func (h *Handlers) requestEmpty(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) PingBD(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("start handler: PingDB")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
 
 	logger.Logger.Info("check connection to Database")
-	err := h.DB.Conn.Ping(ctx)
+	err := h.Conn.Ping(ctx)
 	if err != nil {
 		logger.Logger.Error("get error while check connection to Database:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -302,7 +308,13 @@ func NewRouter(DBConn *database.ConnectionDB) *chi.Mux {
 			logger.Logger.Errorf(err.Error(), "can't read data from file:", config.FileStoragePath)
 		}
 	}
-	handlers := NewHandlers(&storage.Storage, DBConn)
+
+	var handlers *Handlers
+	if DBConn != nil {
+		handlers = NewHandlers(DBConn, DBConn.Conn)
+	} else {
+		handlers = NewHandlers(&storage.Storage, nil)
+	}
 	handlers.memStor.Init()
 
 	logger.Logger.Info("create new router")
