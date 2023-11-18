@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/database"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/file"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/html"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
@@ -14,15 +16,18 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 type Handlers struct {
 	memStor storage.Repositories
+	DB      *database.ConnectionDB
 }
 
-func NewHandlers(stor storage.Repositories) *Handlers {
+func NewHandlers(stor storage.Repositories, conn *database.ConnectionDB) *Handlers {
 	return &Handlers{
 		memStor: stor,
+		DB:      conn,
 	}
 }
 
@@ -241,6 +246,24 @@ func (h *Handlers) requestEmpty(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusBadRequest)
 }
 
+func (h *Handlers) PingBD(w http.ResponseWriter, r *http.Request) {
+	logger.Logger.Info("start handler: PingDB")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	logger.Logger.Info("check connection to Database")
+	err := h.DB.Conn.Ping(ctx)
+	if err != nil {
+		logger.Logger.Error("get error while check connection to Database:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	logger.Logger.Info("sending HTTP 200 response")
+}
+
 func routePost(r *chi.Mux, h *Handlers) {
 	logger.Logger.Infow("Init router for function Post")
 	r.Route("/update", func(r chi.Router) {
@@ -270,24 +293,31 @@ func routeGet(r *chi.Mux, h *Handlers) {
 	})
 }
 
-func NewRouter() *chi.Mux {
-	logger.Logger.Infow("Init router and handlers")
-	if config.Restore {
-		logger.Logger.Info("Restore data from file:", config.FileStoragePath)
+func NewRouter(DBConn *database.ConnectionDB) *chi.Mux {
+	logger.Logger.Infow("init router and handlers")
+	if config.Restore && config.FileStoragePath != "" {
+		logger.Logger.Info("restore data from file:", config.FileStoragePath)
 		err := file.ReadFromFile(config.FileStoragePath)
 		if err != nil {
-			logger.Logger.Errorf(err.Error(), "Can't read data from file:", config.FileStoragePath)
+			logger.Logger.Errorf(err.Error(), "can't read data from file:", config.FileStoragePath)
 		}
 	}
-	handlers := NewHandlers(&storage.Storage)
+	handlers := NewHandlers(&storage.Storage, DBConn)
 	handlers.memStor.Init()
 
+	logger.Logger.Info("create new router")
 	r := chi.NewRouter()
 	routePost(r, handlers)
 	routeGet(r, handlers)
-	logger.Logger.Infow("Init router another function")
+
+	logger.Logger.Infow("init router another function")
 	r.Post("/value/", m.LoggingServer(m.CompressionGzip(handlers.requestGetValue)))
 	r.Get("/", m.LoggingServer(m.CompressionGzip(handlers.requestGetAll)))
+
+	if DBConn != nil {
+		logger.Logger.Infow("create handler PingDB")
+		r.Get("/ping", m.LoggingServer(handlers.PingBD))
+	}
 
 	return r
 }

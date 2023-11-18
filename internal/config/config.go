@@ -19,6 +19,7 @@ var pollInterval int
 var saveInterval int
 var FileStoragePath string
 var Restore bool
+var DatabaseDsn string
 
 func getEnvConfigServer() {
 	if envRunSerAddr := os.Getenv("ADDRESS"); envRunSerAddr != "" {
@@ -39,6 +40,9 @@ func getEnvConfigServer() {
 			Restore = fl
 		}
 
+	}
+	if BDAddr := os.Getenv("DATABASE_DSN"); BDAddr != "" {
+		DatabaseDsn = BDAddr
 	}
 }
 
@@ -82,6 +86,7 @@ func GetServerConfig() {
 	flag.IntVar(&saveInterval, "i", 300, "time interval to save metrics in file")
 	flag.StringVar(&FileStoragePath, "f", "/tmp/metrics-db.json", "path to save file")
 	flag.BoolVar(&Restore, "r", true, "restore data from file or not")
+	flag.StringVar(&DatabaseDsn, "d", "", "database address")
 
 	flag.Parse()
 	getEnvConfigServer()

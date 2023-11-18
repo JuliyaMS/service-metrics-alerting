@@ -13,7 +13,7 @@ import (
 )
 
 func TestSendRequest(t *testing.T) {
-	srv := httptest.NewServer(handlers.NewRouter())
+	srv := httptest.NewServer(handlers.NewRouter(nil))
 	defer srv.Close()
 
 	var rtm runtime.MemStats
@@ -46,7 +46,7 @@ func TestSendRequest(t *testing.T) {
 }
 
 func TestSendRequestJSON(t *testing.T) {
-	srv := httptest.NewServer(handlers.NewRouter())
+	srv := httptest.NewServer(handlers.NewRouter(nil))
 	defer srv.Close()
 
 	var rtm runtime.MemStats
