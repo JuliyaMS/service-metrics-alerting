@@ -3,10 +3,13 @@ package database
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"time"
 )
 
@@ -15,6 +18,10 @@ type ConnectionDB struct {
 }
 
 func NewConnectionDB() *ConnectionDB {
+	if config.DatabaseDsn == "" {
+		return nil
+	}
+
 	logger.Logger.Info("create context with timeout")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -33,13 +40,26 @@ func NewConnectionDB() *ConnectionDB {
 	}
 }
 
+func (db *ConnectionDB) CheckConnection() error {
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	logger.Logger.Info("check connection to Database")
+	err := Retry(4, time.Duration(1), db.Conn.Ping, ctx, "", "", 0)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (db *ConnectionDB) Init() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*200)
 	defer cancel()
 
-	_, errEx := db.Conn.Exec(ctx, "CREATE TABLE IF NOT EXISTS gauge_metrics(Name varchar(100) PRIMARY KEY, Value double precision NOT NULL);"+
-		"CREATE TABLE IF NOT EXISTS count_metrics(Name varchar(100) PRIMARY KEY, Value bigint NOT NULL);")
+	errEx := Retry(4, time.Duration(1), db.Conn.Exec, ctx, "CREATE TABLE IF NOT EXISTS gauge_metrics(Name varchar(100) PRIMARY KEY, Value double precision NOT NULL);"+
+		"CREATE TABLE IF NOT EXISTS count_metrics(Name varchar(100) PRIMARY KEY, Value bigint NOT NULL);", "", 0)
 
 	if errEx != nil {
 		logger.Logger.Info("Error while create tables:", errEx.Error())
@@ -70,7 +90,7 @@ func (db *ConnectionDB) Add(t, name, val string) error {
 	defer cancel()
 
 	logger.Logger.Info("Execute request to add data")
-	_, errEx := db.Conn.Exec(ctx, sql, name, val)
+	errEx := Retry(4, time.Duration(1), db.Conn.Exec, ctx, sql, name, val)
 
 	if errEx != nil {
 		logger.Logger.Info("get error while add values:", errEx.Error())
@@ -96,12 +116,8 @@ func (db *ConnectionDB) Get(tp, name string) string {
 			sql = "SELECT Value FROM count_metrics WHERE Name=$1"
 		}
 
-		logger.Logger.Info("Create sql context")
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*200)
-		defer cancel()
-
 		logger.Logger.Info("Execute request to get data")
-		if err := db.Conn.QueryRow(ctx, sql, name).Scan(&value); err != nil {
+		if err := RetryQueryRow(4, time.Duration(1), db.Conn, sql, name, &value); err != nil {
 			logger.Logger.Error("Get error while execute request: ", err.Error())
 			return "-1"
 		}
@@ -119,12 +135,8 @@ func (db *ConnectionDB) getAllGaugeMetrics() metrics.GaugeMetrics {
 	var gauge metrics.GaugeMetrics
 	gauge.Metrics = make(map[string]float64)
 
-	logger.Logger.Info("Create sql context")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*200)
-	defer cancel()
-
 	logger.Logger.Info("Execute request to get all gauge metrics")
-	rows, err := db.Conn.Query(ctx, "SELECT * FROM gauge_metrics;")
+	rows, err := RetryQuery(4, time.Duration(1), db.Conn, "SELECT * FROM gauge_metrics;")
 	if err != nil {
 		logger.Logger.Error("Get error while execute request: ", err.Error())
 		return metrics.GaugeMetrics{}
@@ -156,12 +168,8 @@ func (db *ConnectionDB) getAllCountMetrics() metrics.CounterMetrics {
 	var counter metrics.CounterMetrics
 	counter.Metrics = make(map[string]int64)
 
-	logger.Logger.Info("Create sql context")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*200)
-	defer cancel()
-
 	logger.Logger.Info("Execute request to get all count metrics")
-	rows, err := db.Conn.Query(ctx, "SELECT * FROM count_metrics;")
+	rows, err := RetryQuery(4, time.Duration(1), db.Conn, "SELECT * FROM count_metrics;")
 	if err != nil {
 		logger.Logger.Error("Get error while execute request: ", err.Error())
 		return metrics.CounterMetrics{}
@@ -191,10 +199,152 @@ func (db *ConnectionDB) GetAll() (metrics.GaugeMetrics, metrics.CounterMetrics) 
 	return db.getAllGaugeMetrics(), db.getAllCountMetrics()
 }
 
+func (db *ConnectionDB) AddAnyData(req []metrics.Metrics) error {
+
+	logger.Logger.Infow("Start transaction")
+	tx, err := db.Conn.Begin(context.Background())
+	if err != nil {
+		return err
+	}
+	for _, el := range req {
+		if el.MType == "counter" {
+
+			sql := "INSERT INTO count_metrics (Name, Value) VALUES ($1, $2)" +
+				"ON CONFLICT (Name) DO UPDATE SET Value = count_metrics.Value + $2;"
+
+			logger.Logger.Info("Execute request to add counter metric")
+			err = Retry(4, time.Duration(1), tx.Exec, context.Background(), sql, el.ID, el.Delta)
+		} else {
+			sql := "INSERT INTO gauge_metrics (Name, Value) VALUES ($1, $2)" +
+				"ON CONFLICT (Name) DO UPDATE SET Value = $2;"
+
+			logger.Logger.Info("Execute request to add gauge metric")
+			err = Retry(4, time.Duration(1), tx.Exec, context.Background(), sql, el.ID, el.Value)
+		}
+
+		if err != nil {
+			tx.Rollback(context.Background())
+			return err
+		}
+		logger.Logger.Info("Execute successful")
+
+	}
+
+	logger.Logger.Info("Close transaction")
+	if err = tx.Commit(context.Background()); err != nil {
+		return err
+	}
+
+	logger.Logger.Info("All data added successful")
+	return nil
+}
+
 func (db *ConnectionDB) Close() error {
-	err := db.Conn.Close(context.Background())
+	err := Retry(4, time.Duration(1), db.Conn.Close, context.Background(), "", "", "")
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func Retry(attempts int, sleep time.Duration, f interface{}, ctx context.Context, sql string, name string, value any) (err error) {
+	logger.Logger.Info("Start retry function")
+	for i := 0; ; i++ {
+		logger.Logger.Info("Execute function, attempt:", i+1)
+		switch t := f.(type) {
+		case func(context.Context) error:
+			logger.Logger.Info("Function type:", t)
+			err = f.(func(context.Context) error)(ctx)
+		case func(context.Context, string, ...any) (pgconn.CommandTag, error):
+			logger.Logger.Info("Function type:", t)
+			_, err = f.(func(context.Context, string, ...any) (pgconn.CommandTag, error))(ctx, sql, name, value)
+		}
+		if err != nil {
+			logger.Logger.Info("Check type of error")
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgerrcode.UniqueViolation == pgErr.Code {
+				logger.Logger.Info("Get retryable-error")
+				if i >= (attempts - 1) {
+					logger.Logger.Info("Number of attempts exhausted")
+					break
+				}
+				logger.Logger.Info("Sleep...")
+				time.Sleep((sleep + time.Duration(2*i)) * time.Second)
+			} else {
+				logger.Logger.Info("Get not retryable-error")
+				return
+			}
+		} else {
+			logger.Logger.Info("Function execute successfully")
+			return
+		}
+
+	}
+	return fmt.Errorf("after %d attempts, last error: %s", attempts, err)
+}
+
+func RetryQueryRow(attempts int, sleep time.Duration, Conn *pgx.Conn, sql string, name string, value *string) (err error) {
+	logger.Logger.Info("Start retry function")
+	for i := 0; ; i++ {
+		logger.Logger.Info("Create sql context")
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*200)
+		defer cancel()
+
+		logger.Logger.Info("Execute function, attempt:", i+1)
+		err = Conn.QueryRow(ctx, sql, name).Scan(value)
+		if err != nil {
+			logger.Logger.Info("Check type of error")
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgerrcode.UniqueViolation == pgErr.Code {
+				logger.Logger.Info("Get retryable-error")
+				if i >= (attempts - 1) {
+					logger.Logger.Info("Number of attempts exhausted")
+					break
+				}
+				logger.Logger.Info("Sleep...")
+				time.Sleep((sleep + time.Duration(2*i)) * time.Second)
+			} else {
+				logger.Logger.Info("Get not retryable-error")
+				return
+			}
+		} else {
+			logger.Logger.Info("Function execute successfully")
+			return
+		}
+
+	}
+	return fmt.Errorf("after %d attempts, last error: %s", attempts, err)
+}
+
+func RetryQuery(attempts int, sleep time.Duration, Conn *pgx.Conn, sql string) (rows pgx.Rows, err error) {
+	logger.Logger.Info("Start retry function")
+	for i := 0; ; i++ {
+		logger.Logger.Info("Create sql context")
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*200)
+		defer cancel()
+
+		logger.Logger.Info("Execute function, attempt:", i+1)
+		rows, err = Conn.Query(ctx, sql)
+		if err != nil {
+			logger.Logger.Info("Check type of error")
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgerrcode.UniqueViolation == pgErr.Code {
+				logger.Logger.Info("Get retryable-error")
+				if i >= (attempts - 1) {
+					logger.Logger.Info("Number of attempts exhausted")
+					break
+				}
+				logger.Logger.Info("Sleep...")
+				time.Sleep((sleep + time.Duration(2*i)) * time.Second)
+			} else {
+				logger.Logger.Info("Get not retryable-error")
+				return
+			}
+		} else {
+			logger.Logger.Info("Function execute successfully")
+			return
+		}
+
+	}
+	return rows, fmt.Errorf("after %d attempts, last error: %s", attempts, err)
 }

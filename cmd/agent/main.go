@@ -13,7 +13,7 @@ import (
 func main() {
 	config.GetAgentConfig()
 
-	requestURL := fmt.Sprintf("http://%s/update/", config.FlagRunAgAddr)
+	requestURL := fmt.Sprintf("http://%s/updates/", config.FlagRunAgAddr)
 	agent := agent.NewAgent(requestURL, true)
 
 	var rtm runtime.MemStats
@@ -32,7 +32,7 @@ func main() {
 				metrics.ChangeMetrics(&rtm)
 			case tm2 := <-ticker2.C:
 				logger.Logger.Infow("Send metrics", "time", tm2)
-				err := agent.SendRequestJSON()
+				err := agent.SendBatchDataJSON()
 				if err != nil {
 					panic(err)
 				}

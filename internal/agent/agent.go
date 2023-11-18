@@ -191,3 +191,65 @@ func (a *Agent) SendRequestJSON() error {
 
 	return nil
 }
+
+func (a *Agent) SendBatchDataJSON() error {
+
+	a.logger.Infow("Start send metrics")
+
+	var req []metrics.Metrics
+	client := http.Client{Timeout: time.Duration(60) * time.Second}
+
+	for k, v := range metrics.GaugeAgent.ReturnValues() {
+		a.logger.Infow("Add gauge metric to list", "name", k, "value", v)
+		req = append(req, metrics.Metrics{MType: "gauge", ID: k, Value: &v})
+	}
+	a.logger.Infow("Add counter metric to list", "name", "PollCount", "value", metrics.PollCount)
+	req = append(req, metrics.Metrics{MType: "counter", ID: "PollCount", Delta: &metrics.PollCount})
+
+	a.logger.Infow("Encode all metrics")
+
+	reqByte, err := json.Marshal(req)
+
+	if err != nil {
+		a.logger.Error(err.Error(), "event", "encode data")
+		return errors.New("encoding data failed")
+	}
+
+	data := bytes.NewBuffer(reqByte)
+
+	if a.Compress {
+		var errCompress error
+		data, errCompress = a.compressData(reqByte)
+
+		if errCompress != nil {
+			a.logger.Error(errCompress.Error(), "event", "compress data")
+			return errors.New("compress data failed")
+		}
+	}
+
+	a.logger.Infow("Send all metrics", "addr", config.FlagRunAgAddr, "data", data)
+	err = retry.Do(func() error {
+		r, _ := http.NewRequest("POST", a.URL, data)
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Content-Encoding", "gzip")
+		r.Header.Set("Accept-Encoding", "gzip")
+		res, er := client.Do(r)
+
+		if res != nil {
+			if erClose := res.Body.Close(); erClose != nil {
+				a.logger.Error(erClose.Error(), "event", "close response")
+				return erClose
+			}
+		}
+		return er
+	},
+		retry.Attempts(10),
+		retry.OnRetry(func(n uint, err error) { a.logger.Info("Retrying request after error: %v", err) }))
+
+	if err != nil {
+		a.logger.Error(err.Error(), "event", "send request")
+		return errors.New("request failed")
+	}
+
+	return nil
+}
