@@ -1,10 +1,14 @@
 package handlers
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/database"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/file"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/hash"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/html"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
@@ -13,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 	"html/template"
+	"io"
 	"net/http"
 	"strconv"
 )
@@ -138,10 +143,21 @@ func (h *Handlers) requestType(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 
+	logger.Logger.Info("Start handler: requestUpdate")
+
 	if r.Method != http.MethodPost {
 		logger.Logger.Infow("got request with bad method", zap.String("method", r.Method))
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
+	}
+
+	if config.HashKeyServer != "" {
+		err := h.checkSignature(r)
+		if err != nil {
+			logger.Logger.Error("Get error while check signature: ", err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 	}
 
 	logger.Logger.Infow("decoding request")
@@ -178,8 +194,16 @@ func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 		req.Delta = &newDelta
 	}
 
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
+	sign, errSign := h.createSignature(req)
+	if errSign != nil {
+		logger.Logger.Error("Get error while create signature: ", errSign)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	r.Header.Set("HashSHA256", sign)
+	w.WriteHeader(http.StatusOK)
+
 	logger.Logger.Infow("Encode data for response")
 	enc := json.NewEncoder(w)
 	if err := enc.Encode(req); err != nil {
@@ -195,6 +219,15 @@ func (h *Handlers) requestGetValue(w http.ResponseWriter, r *http.Request) {
 		logger.Logger.Debug("got request with bad method", zap.String("method", r.Method))
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
+	}
+
+	if config.HashKeyServer != "" {
+		err := h.checkSignature(r)
+		if err != nil {
+			logger.Logger.Error("Get error while check signature: ", err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 	}
 
 	logger.Logger.Infow("decoding request")
@@ -223,7 +256,7 @@ func (h *Handlers) requestGetValue(w http.ResponseWriter, r *http.Request) {
 		logger.Logger.Infow("Get counter metric value", "name", req.ID)
 		Delta, err := strconv.ParseInt(h.memStor.Get(req.MType, req.ID), 10, 64)
 		if err != nil {
-			logger.Logger.Error("cannot write Delta", zap.Error(err))
+			logger.Logger.Error("Cannot write Delta", zap.Error(err))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -232,7 +265,15 @@ func (h *Handlers) requestGetValue(w http.ResponseWriter, r *http.Request) {
 		}
 		req.Delta = &Delta
 	}
+
 	w.Header().Set("Content-Type", "application/json")
+	sign, errSign := h.createSignature(req)
+	if errSign != nil {
+		logger.Logger.Error("Get error while create signature: ", errSign)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	r.Header.Set("HashSHA256", sign)
 	w.WriteHeader(http.StatusOK)
 
 	logger.Logger.Infow("Encode data for response")
@@ -264,19 +305,28 @@ func (h *Handlers) PingDB(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) UpdatesDB(w http.ResponseWriter, r *http.Request) {
-	logger.Logger.Info("start handler: UpdatesDB")
+	logger.Logger.Info("Start handler: UpdatesDB")
 
 	if r.Method != http.MethodPost {
-		logger.Logger.Debug("got request with bad method", zap.String("method", r.Method))
+		logger.Logger.Debug("Got request with bad method", zap.String("method", r.Method))
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
-	logger.Logger.Infow("decoding request")
+	if config.HashKeyServer != "" {
+		err := h.checkSignature(r)
+		if err != nil {
+			logger.Logger.Error("Get error while check signature: ", err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
+
+	logger.Logger.Infow("Decoding request")
 	var req []metrics.Metrics
 	dec := json.NewDecoder(r.Body)
 	if err := dec.Decode(&req); err != nil {
-		logger.Logger.Error("cannot decode request JSON body", zap.Error(err))
+		logger.Logger.Error("Cannot decode request JSON body", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -288,7 +338,34 @@ func (h *Handlers) UpdatesDB(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	logger.Logger.Infow("sending HTTP 200 response")
+	logger.Logger.Infow("Sending HTTP 200 response")
+}
+
+func (h *Handlers) checkSignature(r *http.Request) error {
+	logger.Logger.Info("Check signature from agent")
+	data, err := io.ReadAll(r.Body)
+	r.Body = io.NopCloser(bytes.NewBuffer(data))
+	if err != nil {
+		return err
+	}
+	sign, err := base64.StdEncoding.DecodeString(r.Header.Get("HashSHA256"))
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(data))
+	if !bytes.Equal(sign, hash.GetSignature(data, config.HashKeyServer)) {
+		return err
+	}
+	return nil
+}
+
+func (h *Handlers) createSignature(req metrics.Metrics) (string, error) {
+	data, err := json.Marshal(req)
+	if err != nil {
+		return "", err
+	}
+	sign := hash.GetSignature(data, config.HashKeyAgent)
+	return base64.StdEncoding.EncodeToString(sign), nil
 }
 
 func routePost(r *chi.Mux, h *Handlers) {

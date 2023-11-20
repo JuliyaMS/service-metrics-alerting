@@ -11,6 +11,8 @@ import (
 
 var FlagRunSerAddr string
 var FlagRunAgAddr string
+var HashKeyAgent string
+var HashKeyServer string
 var TimeInterval time.Duration
 var TimeInterval2 time.Duration
 var StoreInterval time.Duration
@@ -44,6 +46,10 @@ func getEnvConfigServer() {
 	if BDAddr := os.Getenv("DATABASE_DSN"); BDAddr != "" {
 		DatabaseDsn = BDAddr
 	}
+
+	if HashKey := os.Getenv("KEY"); HashKey != "" {
+		HashKeyServer = HashKey
+	}
 }
 
 func getEnvConfigAgent() {
@@ -61,6 +67,9 @@ func getEnvConfigAgent() {
 			pollInterval = poll
 		}
 	}
+	if HashKey := os.Getenv("KEY"); HashKey != "" {
+		HashKeyAgent = HashKey
+	}
 }
 
 func GetAgentConfig() {
@@ -70,6 +79,7 @@ func GetAgentConfig() {
 	flag.StringVar(&FlagRunAgAddr, "a", ":8080", "address and port to run server")
 	flag.IntVar(&reportInterval, "r", 10, "time interval for generate metrics")
 	flag.IntVar(&pollInterval, "p", 2, "time interval for send request to server")
+	flag.StringVar(&HashKeyAgent, "k", "", "secret hash key for agent")
 
 	flag.Parse()
 	getEnvConfigAgent()
@@ -87,6 +97,7 @@ func GetServerConfig() {
 	flag.StringVar(&FileStoragePath, "f", "/tmp/metrics-db.json", "path to save file")
 	flag.BoolVar(&Restore, "r", true, "restore data from file or not")
 	flag.StringVar(&DatabaseDsn, "d", "", "database address")
+	flag.StringVar(&HashKeyServer, "k", "", "secret hash key for server")
 
 	flag.Parse()
 	getEnvConfigServer()

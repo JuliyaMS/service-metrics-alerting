@@ -3,10 +3,12 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/hash"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
 	"github.com/avast/retry-go"
@@ -209,7 +211,9 @@ func (a *Agent) SendBatchDataJSON() error {
 
 	for k, v := range metrics.GaugeAgent.ReturnValues() {
 		a.logger.Infow("Add gauge metric to list", "name", k, "value", v)
-		req = append(req, metrics.Metrics{MType: "gauge", ID: k, Value: &v})
+		value := new(float64)
+		*value = v
+		req = append(req, metrics.Metrics{MType: "gauge", ID: k, Value: value})
 	}
 	a.logger.Infow("Add counter metric to list", "name", "PollCount", "value", metrics.PollCount)
 	req = append(req, metrics.Metrics{MType: "counter", ID: "PollCount", Delta: &metrics.PollCount})
@@ -241,6 +245,10 @@ func (a *Agent) SendBatchDataJSON() error {
 		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set("Content-Encoding", "gzip")
 		r.Header.Set("Accept-Encoding", "gzip")
+		if config.HashKeyAgent != "" {
+			sign := hash.GetSignature(reqByte, config.HashKeyAgent)
+			r.Header.Set("HashSHA256", base64.StdEncoding.EncodeToString(sign))
+		}
 		res, er := client.Do(r)
 
 		if res != nil {
