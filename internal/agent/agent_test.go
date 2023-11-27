@@ -17,7 +17,7 @@ func TestSendRequest(t *testing.T) {
 	defer srv.Close()
 
 	var rtm runtime.MemStats
-	metrics.ChangeMetrics(&rtm)
+	metrics.ChangeMetrics(&rtm, nil)
 
 	tests := []struct {
 		nameTest string
@@ -50,7 +50,7 @@ func TestSendRequestJSON(t *testing.T) {
 	defer srv.Close()
 
 	var rtm runtime.MemStats
-	metrics.ChangeMetrics(&rtm)
+	metrics.ChangeMetrics(&rtm, nil)
 
 	tests := []struct {
 		nameTest string

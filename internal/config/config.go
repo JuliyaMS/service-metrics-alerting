@@ -19,6 +19,7 @@ var StoreInterval time.Duration
 var reportInterval int
 var pollInterval int
 var saveInterval int
+var RateLimit int
 var FileStoragePath string
 var Restore bool
 var DatabaseDsn string
@@ -70,6 +71,11 @@ func getEnvConfigAgent() {
 	if HashKey := os.Getenv("KEY"); HashKey != "" {
 		HashKeyAgent = HashKey
 	}
+	if Limit := os.Getenv("RATE_LIMIT"); Limit != "" {
+		if limit, err := strconv.Atoi(Limit); err == nil {
+			RateLimit = limit
+		}
+	}
 }
 
 func GetAgentConfig() {
@@ -80,6 +86,7 @@ func GetAgentConfig() {
 	flag.IntVar(&reportInterval, "r", 10, "time interval for generate metrics")
 	flag.IntVar(&pollInterval, "p", 2, "time interval for send request to server")
 	flag.StringVar(&HashKeyAgent, "k", "", "secret hash key for agent")
+	flag.IntVar(&RateLimit, "l", 2, "count outgoing request")
 
 	flag.Parse()
 	getEnvConfigAgent()

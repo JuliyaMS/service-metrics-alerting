@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"github.com/shirou/gopsutil/v3/mem"
 	"math/rand"
 	"runtime"
 )
@@ -14,15 +15,18 @@ var GaugeAgent = GaugeMetrics{Metrics: map[string]float64{"Alloc": 0, "BuckHashS
 	"NumForcedGC": 0, "NumGC": 0, "OtherSys": 0, "PauseTotalNs": 0, "StackInuse": 0,
 	"StackSys": 0, "Sys": 0, "TotalAlloc": 0, "RandomValue": 0}}
 
+var OptionalGaugeMetricAgent = GaugeMetrics{Metrics: map[string]float64{"TotalMemory": 0, "FreeMemory": 0, "CPUutilization1": 0}}
+
 func randomValue() float64 {
 	val1 := float64(rand.Intn(1000))
 	val2 := float64(rand.Intn(100000))
 	return val1 + (val2-val1)*rand.Float64()
 }
 
-func ChangeMetrics(rtm *runtime.MemStats) {
+func ChangeMetricsBaseMetrics(rtm *runtime.MemStats, in chan<- GaugeMetrics) {
 
 	runtime.ReadMemStats(rtm)
+
 	GaugeAgent.Metrics["Alloc"] = float64(rtm.Alloc)
 	GaugeAgent.Metrics["BuckHashSys"] = float64(rtm.BuckHashSys)
 	GaugeAgent.Metrics["Frees"] = float64(rtm.Frees)
@@ -49,6 +53,26 @@ func ChangeMetrics(rtm *runtime.MemStats) {
 	GaugeAgent.Metrics["Sys"] = float64(rtm.Sys)
 	GaugeAgent.Metrics["TotalAlloc"] = float64(rtm.TotalAlloc)
 	GaugeAgent.Metrics["RandomValue"] = randomValue()
+	if (PollCount % 5) == 0 {
+		in <- GaugeAgent
+	}
+
+}
+
+func ChangeOptionalMetrics(in chan<- GaugeMetrics) {
+	v, _ := mem.VirtualMemory()
+	OptionalGaugeMetricAgent.Metrics["TotalMemory"] = float64(v.Total)
+	OptionalGaugeMetricAgent.Metrics["FreeMemory"] = float64(v.Free)
+	OptionalGaugeMetricAgent.Metrics["CPUutilization1"] = v.UsedPercent
+	if (PollCount % 5) == 0 {
+		in <- OptionalGaugeMetricAgent
+	}
+}
+
+func ChangeMetrics(rtm *runtime.MemStats, in chan<- GaugeMetrics) {
 	PollCount += 1
+
+	go ChangeMetricsBaseMetrics(rtm, in)
+	go ChangeOptionalMetrics(in)
 
 }

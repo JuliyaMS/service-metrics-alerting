@@ -202,14 +202,15 @@ func (a *Agent) SendRequestJSON() error {
 	return nil
 }
 
-func (a *Agent) SendBatchDataJSON() error {
+func (a *Agent) SendBatchDataJSON(out <-chan metrics.GaugeMetrics) error {
 
 	a.logger.Infow("Start send metrics")
 
 	var req []metrics.Metrics
 	client := http.Client{Timeout: time.Duration(60) * time.Second}
+	Metrics := <-out
 
-	for k, v := range metrics.GaugeAgent.ReturnValues() {
+	for k, v := range Metrics.ReturnValues() {
 		a.logger.Infow("Add gauge metric to list", "name", k, "value", v)
 		value := new(float64)
 		*value = v
@@ -272,4 +273,12 @@ func (a *Agent) SendBatchDataJSON() error {
 	}
 
 	return nil
+}
+
+func (a *Agent) Worker(id int, out <-chan metrics.GaugeMetrics) {
+	a.logger.Infow("Run worker:", id)
+	err := a.SendBatchDataJSON(out)
+	if err != nil {
+		a.logger.Error(err.Error(), "event", "send batch request")
+	}
 }

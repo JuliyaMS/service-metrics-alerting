@@ -23,18 +23,19 @@ func main() {
 	tickerChan := make(chan bool)
 
 	go func() {
+		in := make(chan metrics.GaugeMetrics, 2)
 		for {
 			select {
 			case <-tickerChan:
+				close(in)
 				return
 			case tm := <-ticker.C:
 				logger.Logger.Infow("Change metrics", "time", tm)
-				metrics.ChangeMetrics(&rtm)
+				metrics.ChangeMetrics(&rtm, in)
 			case tm2 := <-ticker2.C:
 				logger.Logger.Infow("Send metrics", "time", tm2)
-				err := agent.SendBatchDataJSON()
-				if err != nil {
-					panic(err)
+				for i := 1; i <= config.RateLimit; i++ {
+					go agent.Worker(i, in)
 				}
 			}
 		}
