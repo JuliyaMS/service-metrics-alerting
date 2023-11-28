@@ -405,10 +405,7 @@ func NewRouter() (*chi.Mux, *Handlers) {
 	logger.Logger.Infow("init router and handlers")
 
 	stor := storage.NewStorage()
-	if stor == nil {
-		logger.Logger.Error("Can't create storage")
-		return nil, nil
-	}
+
 	var handlers = NewHandlers(stor)
 	handlers.MemStor.Init()
 
