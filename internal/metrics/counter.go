@@ -20,6 +20,12 @@ func (c *CounterMetrics) Init() {
 	}
 }
 
+func (c *CounterMetrics) Close() {
+	if c.Metrics != nil {
+		clear(c.Metrics)
+	}
+}
+
 func (c *CounterMetrics) Add(name string, val string) bool {
 	if value, err := strconv.ParseInt(val, 10, 64); err == nil {
 		c.Metrics[name] += value

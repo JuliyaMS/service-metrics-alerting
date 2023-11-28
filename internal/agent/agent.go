@@ -276,7 +276,7 @@ func (a *Agent) SendBatchDataJSON(out <-chan metrics.GaugeMetrics) error {
 }
 
 func (a *Agent) Worker(id int, out <-chan metrics.GaugeMetrics) {
-	a.logger.Infow("Run worker:", id)
+	a.logger.Info("Run worker:", id)
 	err := a.SendBatchDataJSON(out)
 	if err != nil {
 		a.logger.Error(err.Error(), "event", "send batch request")

@@ -20,6 +20,12 @@ func (g *GaugeMetrics) Init() {
 	}
 }
 
+func (g *GaugeMetrics) Close() {
+	if g.Metrics != nil {
+		clear(g.Metrics)
+	}
+}
+
 func (g *GaugeMetrics) Add(name string, val string) bool {
 	if value, err := strconv.ParseFloat(val, 64); err == nil {
 		g.Metrics[name] = value

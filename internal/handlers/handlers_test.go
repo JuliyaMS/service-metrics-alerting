@@ -28,7 +28,8 @@ func testRequest(t *testing.T, ts *httptest.Server, method,
 }
 
 func TestRouter(t *testing.T) {
-	ts := httptest.NewServer(NewRouter(nil))
+	ch, h := NewRouter()
+	ts := httptest.NewServer(ch)
 	defer ts.Close()
 
 	randomValues := []float64{127.765, 154789.33200}
@@ -212,4 +213,5 @@ func TestRouter(t *testing.T) {
 
 		require.JSONEq(t, successBody, string(b))
 	})
+	h.MemStor.Close()
 }

@@ -2,10 +2,9 @@ package main
 
 import (
 	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
-	"github.com/JuliyaMS/service-metrics-alerting/internal/database"
-	"github.com/JuliyaMS/service-metrics-alerting/internal/file"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/handlers"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/storage"
 	"net/http"
 	"sync"
 	"time"
@@ -13,8 +12,7 @@ import (
 
 func main() {
 	config.GetServerConfig()
-	DBConn := database.NewConnectionDB()
-	r := handlers.NewRouter(DBConn)
+	r, h := handlers.NewRouter()
 
 	var waitGroup sync.WaitGroup
 	waitGroup.Add(1)
@@ -36,20 +34,18 @@ func main() {
 		defer waitGroup.Done()
 		for {
 			<-time.After(config.StoreInterval)
-			logger.Logger.Info("Write data to file:", config.FileStoragePath)
-			if err := file.WriteToFile(config.FileStoragePath); err != nil {
-				logger.Logger.Error("Function WriteToFile return error:", err.Error())
+			if config.FileStoragePath != "" {
+				logger.Logger.Info("Write data to file:", config.FileStoragePath)
+				if err := storage.WriteToFile(config.FileStoragePath, &h.MemStor); err != nil {
+					logger.Logger.Error("Function WriteToFile return error:", err.Error())
+				}
 			}
 		}
 	}()
-
 	waitGroup.Wait()
 
-	if DBConn != nil {
-		logger.Logger.Info("close connection to Database")
-		if err := DBConn.Close(); err != nil {
-			logger.Logger.Error("get error while close connection to Database:", err.Error())
-		}
+	if err := h.MemStor.Close(); err != nil {
+		logger.Logger.Info("Get error while close storage:", err.Error())
 	}
 
 }
