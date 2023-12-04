@@ -2,9 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
-	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
-	"github.com/JuliyaMS/service-metrics-alerting/internal/database"
-	"github.com/JuliyaMS/service-metrics-alerting/internal/file"
+	"fmt"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/html"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
@@ -18,12 +16,12 @@ import (
 )
 
 type Handlers struct {
-	memStor storage.Repositories
+	MemStor storage.Repositories
 }
 
 func NewHandlers(stor storage.Repositories) *Handlers {
 	return &Handlers{
-		memStor: stor,
+		MemStor: stor,
 	}
 }
 
@@ -38,7 +36,7 @@ func (h *Handlers) requestValue(w http.ResponseWriter, r *http.Request) {
 	metricName := chi.URLParam(r, "name")
 	metricValue := chi.URLParam(r, "value")
 
-	if err := h.memStor.Add(metricType, metricName, metricValue); err != nil {
+	if err := h.MemStor.Add(metricType, metricName, metricValue); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -74,8 +72,8 @@ func (h *Handlers) requestGetName(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
 	metricName := chi.URLParam(r, "name")
 
-	logger.Logger.Info("Get value from memStor")
-	value := h.memStor.Get(metricType, metricName)
+	logger.Logger.Info("Get value from MemStor")
+	value := h.MemStor.Get(metricType, metricName)
 
 	if value != "-1" {
 		logger.Logger.Info("Get value: ", value, " for metric: ", metricName)
@@ -97,7 +95,7 @@ func (h *Handlers) requestGetAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logger.Logger.Infow("Get data for HTML format")
-	dataGauge, dataCounter := html.GetHTMLStructs(h.memStor.GetAll())
+	dataGauge, dataCounter := html.GetHTMLStructs(h.MemStor.GetAll())
 
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
@@ -138,6 +136,8 @@ func (h *Handlers) requestType(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 
+	logger.Logger.Info("Start handler: requestUpdate")
+
 	if r.Method != http.MethodPost {
 		logger.Logger.Infow("got request with bad method", zap.String("method", r.Method))
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -156,7 +156,7 @@ func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.MType == "gauge" {
 		logger.Logger.Infow("Update gauge metric", "name", req.ID, "value", *req.Value)
-		if err := h.memStor.Add(req.MType, req.ID, strconv.FormatFloat(*req.Value, 'g', -1, 64)); err != nil {
+		if err := h.MemStor.Add(req.MType, req.ID, strconv.FormatFloat(*req.Value, 'g', -1, 64)); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -164,12 +164,12 @@ func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 
 	if req.MType == "counter" {
 		logger.Logger.Infow("Update counter metric", "name", req.ID, "value", *req.Delta)
-		if err := h.memStor.Add(req.MType, req.ID, strconv.FormatInt(*req.Delta, 10)); err != nil {
+		if err := h.MemStor.Add(req.MType, req.ID, strconv.FormatInt(*req.Delta, 10)); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 
 		}
-		newDelta, err := strconv.ParseInt(h.memStor.Get("counter", req.ID), 10, 64)
+		newDelta, err := strconv.ParseInt(h.MemStor.Get("counter", req.ID), 10, 64)
 		if err != nil {
 			logger.Logger.Error("cannot write new Delta", zap.Error(err))
 			w.WriteHeader(http.StatusInternalServerError)
@@ -178,8 +178,9 @@ func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 		req.Delta = &newDelta
 	}
 
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
 	logger.Logger.Infow("Encode data for response")
 	enc := json.NewEncoder(w)
 	if err := enc.Encode(req); err != nil {
@@ -205,9 +206,11 @@ func (h *Handlers) requestGetValue(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
 	if req.MType == "gauge" {
 		logger.Logger.Infow("Get gauge metric value", "name", req.ID)
-		Value, err := strconv.ParseFloat(h.memStor.Get(req.MType, req.ID), 64)
+		Value, err := strconv.ParseFloat(h.MemStor.Get(req.MType, req.ID), 64)
+		fmt.Println("Gauge Value:", Value)
 		if err != nil {
 			logger.Logger.Error("cannot write Value", zap.Error(err))
 			w.WriteHeader(http.StatusInternalServerError)
@@ -216,22 +219,26 @@ func (h *Handlers) requestGetValue(w http.ResponseWriter, r *http.Request) {
 		if Value == -1 {
 			Value = 0
 		}
+		fmt.Println("Gauge Value:", Value)
 		req.Value = &Value
 	}
 
 	if req.MType == "counter" {
 		logger.Logger.Infow("Get counter metric value", "name", req.ID)
-		Delta, err := strconv.ParseInt(h.memStor.Get(req.MType, req.ID), 10, 64)
+		Delta, err := strconv.ParseInt(h.MemStor.Get(req.MType, req.ID), 10, 64)
+		fmt.Println("Counter Value:", Delta)
 		if err != nil {
-			logger.Logger.Error("cannot write Delta", zap.Error(err))
+			logger.Logger.Error("Cannot write Delta", zap.Error(err))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		if Delta == -1 {
 			Delta = 0
 		}
+		fmt.Println("Counter Value:", Delta)
 		req.Delta = &Delta
 	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
@@ -250,10 +257,10 @@ func (h *Handlers) requestEmpty(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusBadRequest)
 }
 
-func (h *Handlers) PingDB(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) pingDB(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("start handler: PingDB")
 
-	if err := h.memStor.CheckConnection(); err != nil {
+	if err := h.MemStor.CheckConnection(); err != nil {
 		logger.Logger.Error("get error while check connection to Database:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -263,32 +270,32 @@ func (h *Handlers) PingDB(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("sending HTTP 200 response")
 }
 
-func (h *Handlers) UpdatesDB(w http.ResponseWriter, r *http.Request) {
-	logger.Logger.Info("start handler: UpdatesDB")
+func (h *Handlers) updatesDB(w http.ResponseWriter, r *http.Request) {
+	logger.Logger.Info("Start handler: UpdatesDB")
 
 	if r.Method != http.MethodPost {
-		logger.Logger.Debug("got request with bad method", zap.String("method", r.Method))
+		logger.Logger.Debug("Got request with bad method", zap.String("method", r.Method))
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
-	logger.Logger.Infow("decoding request")
+	logger.Logger.Infow("Decoding request")
 	var req []metrics.Metrics
 	dec := json.NewDecoder(r.Body)
 	if err := dec.Decode(&req); err != nil {
-		logger.Logger.Error("cannot decode request JSON body", zap.Error(err))
+		logger.Logger.Error("Cannot decode request JSON body", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if err := h.memStor.AddAnyData(req); err != nil {
+	if err := h.MemStor.AddAnyData(req); err != nil {
 		logger.Logger.Error("Get error while execute transaction:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	logger.Logger.Infow("sending HTTP 200 response")
+	logger.Logger.Infow("Sending HTTP 200 response")
 }
 
 func routePost(r *chi.Mux, h *Handlers) {
@@ -320,23 +327,18 @@ func routeGet(r *chi.Mux, h *Handlers) {
 	})
 }
 
-func NewRouter(DBConn *database.ConnectionDB) *chi.Mux {
-	logger.Logger.Infow("init router and handlers")
-	if config.Restore && config.FileStoragePath != "" {
-		logger.Logger.Info("restore data from file:", config.FileStoragePath)
-		err := file.ReadFromFile(config.FileStoragePath)
-		if err != nil {
-			logger.Logger.Errorf(err.Error(), "can't read data from file:", config.FileStoragePath)
-		}
-	}
+type Router struct {
+	handlers *Handlers
+	R        *chi.Mux
+}
 
-	var handlers *Handlers
-	if config.DatabaseDsn != "" {
-		handlers = NewHandlers(DBConn)
-	} else {
-		handlers = NewHandlers(&storage.Storage)
-	}
-	handlers.memStor.Init()
+func NewRouter() Router {
+	logger.Logger.Infow("init router and handlers")
+
+	stor := storage.NewStorage()
+
+	handlers := NewHandlers(stor)
+	handlers.MemStor.Init()
 
 	logger.Logger.Info("create new router")
 	r := chi.NewRouter()
@@ -344,10 +346,18 @@ func NewRouter(DBConn *database.ConnectionDB) *chi.Mux {
 	routeGet(r, handlers)
 
 	logger.Logger.Infow("init router another function")
-	r.Post("/value/", m.LoggingServer(m.CompressionGzip(handlers.requestGetValue)))
-	r.Post("/updates/", m.LoggingServer(m.CompressionGzip(handlers.UpdatesDB)))
+	r.Post("/value/", m.LoggingServer(m.CompressionGzip(m.SignatureData(handlers.requestGetValue))))
+	r.Post("/updates/", m.LoggingServer(m.CompressionGzip(m.SignatureData(handlers.updatesDB))))
 	r.Get("/", m.LoggingServer(m.CompressionGzip(handlers.requestGetAll)))
-	r.Get("/ping", m.LoggingServer(handlers.PingDB))
+	r.Get("/ping", m.LoggingServer(handlers.pingDB))
 
-	return r
+	return Router{R: r, handlers: handlers}
+}
+
+func (ro *Router) Stop() {
+	logger.Logger.Info("Stop server...")
+	err := ro.handlers.MemStor.Close()
+	if err != nil {
+		logger.Logger.Error("Get error while close connection to storage: ", err.Error())
+	}
 }

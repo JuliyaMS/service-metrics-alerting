@@ -1,4 +1,4 @@
-package database
+package storage
 
 import (
 	"context"
@@ -62,9 +62,7 @@ func (db *ConnectionDB) Init() {
 	sql := "CREATE TABLE IF NOT EXISTS gauge_metrics(Name varchar(100) PRIMARY KEY, Value double precision NOT NULL);" +
 		"CREATE TABLE IF NOT EXISTS count_metrics(Name varchar(100) PRIMARY KEY, Value bigint NOT NULL);"
 
-
 	_, errEx := db.Conn.Exec(ctx, sql)
-
 
 	if errEx != nil {
 		logger.Logger.Info("Error while create table gauge_metrics: ", errEx.Error())
@@ -135,17 +133,17 @@ func (db *ConnectionDB) Get(tp, name string) string {
 	return "-1"
 }
 
-func (db *ConnectionDB) getAllGaugeMetrics() metrics.GaugeMetrics {
+func (db *ConnectionDB) getAllGaugeMetrics() GaugeMetrics {
 
 	logger.Logger.Info("Get all gauge values from DB")
-	var gauge metrics.GaugeMetrics
+	var gauge GaugeMetrics
 	gauge.Metrics = make(map[string]float64)
 
 	logger.Logger.Info("Execute request to get all gauge metrics")
 	rows, err := RetryQuery(4, time.Duration(1), db.Conn, "SELECT * FROM gauge_metrics;")
 	if err != nil {
 		logger.Logger.Error("Get error while execute request: ", err.Error())
-		return metrics.GaugeMetrics{}
+		return GaugeMetrics{}
 	}
 
 	defer rows.Close()
@@ -160,7 +158,7 @@ func (db *ConnectionDB) getAllGaugeMetrics() metrics.GaugeMetrics {
 		err = rows.Scan(&name, &value)
 		if err != nil {
 			logger.Logger.Error("Get error while scan row: ", err.Error())
-			return metrics.GaugeMetrics{}
+			return GaugeMetrics{}
 		}
 		gauge.Metrics[name] = value
 	}
@@ -168,17 +166,17 @@ func (db *ConnectionDB) getAllGaugeMetrics() metrics.GaugeMetrics {
 	return gauge
 }
 
-func (db *ConnectionDB) getAllCountMetrics() metrics.CounterMetrics {
+func (db *ConnectionDB) getAllCountMetrics() CounterMetrics {
 
 	logger.Logger.Info("Get all count values from DB")
-	var counter metrics.CounterMetrics
+	var counter CounterMetrics
 	counter.Metrics = make(map[string]int64)
 
 	logger.Logger.Info("Execute request to get all count metrics")
 	rows, err := RetryQuery(4, time.Duration(1), db.Conn, "SELECT * FROM count_metrics;")
 	if err != nil {
 		logger.Logger.Error("Get error while execute request: ", err.Error())
-		return metrics.CounterMetrics{}
+		return CounterMetrics{}
 	}
 
 	defer rows.Close()
@@ -193,7 +191,7 @@ func (db *ConnectionDB) getAllCountMetrics() metrics.CounterMetrics {
 		err = rows.Scan(&name, &value)
 		if err != nil {
 			logger.Logger.Error("Get error while scan row: ", err.Error())
-			return metrics.CounterMetrics{}
+			return CounterMetrics{}
 		}
 		counter.Metrics[name] = value
 	}
@@ -201,11 +199,13 @@ func (db *ConnectionDB) getAllCountMetrics() metrics.CounterMetrics {
 	return counter
 }
 
-func (db *ConnectionDB) GetAll() (metrics.GaugeMetrics, metrics.CounterMetrics) {
+func (db *ConnectionDB) GetAll() (GaugeMetrics, CounterMetrics) {
 	return db.getAllGaugeMetrics(), db.getAllCountMetrics()
 }
 
 func (db *ConnectionDB) AddAnyData(req []metrics.Metrics) error {
+	DBMutex.Lock()
+	defer DBMutex.Unlock()
 
 	logger.Logger.Infow("Start transaction")
 	tx, err := db.Conn.Begin(context.Background())
@@ -242,17 +242,18 @@ func (db *ConnectionDB) AddAnyData(req []metrics.Metrics) error {
 	}
 
 	logger.Logger.Info("All data added successful")
+	time.Sleep(1 * time.Second)
 	return nil
 }
 
 func (db *ConnectionDB) Close() error {
+	logger.Logger.Info("Close connection")
 	err := Retry(4, time.Duration(1), db.Conn.Close, context.Background(), "", "", "")
 	if err != nil {
 		return err
 	}
 	return nil
 }
-
 
 func Retry(attempts int, sleep time.Duration, f interface{}, ctx context.Context, sql string, val1 any, val2 any) (err error) {
 	logger.Logger.Info("Start retry function")

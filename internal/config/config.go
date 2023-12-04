@@ -11,12 +11,15 @@ import (
 
 var FlagRunSerAddr string
 var FlagRunAgAddr string
-var TimeInterval time.Duration
-var TimeInterval2 time.Duration
+var HashKeyAgent string
+var HashKeyServer string
+var PollInterval time.Duration
+var ReportInterval time.Duration
 var StoreInterval time.Duration
 var reportInterval int
 var pollInterval int
 var saveInterval int
+var RateLimit int
 var FileStoragePath string
 var Restore bool
 var DatabaseDsn string
@@ -44,6 +47,10 @@ func getEnvConfigServer() {
 	if BDAddr := os.Getenv("DATABASE_DSN"); BDAddr != "" {
 		DatabaseDsn = BDAddr
 	}
+
+	if HashKey := os.Getenv("KEY"); HashKey != "" {
+		HashKeyServer = HashKey
+	}
 }
 
 func getEnvConfigAgent() {
@@ -61,6 +68,14 @@ func getEnvConfigAgent() {
 			pollInterval = poll
 		}
 	}
+	if HashKey := os.Getenv("KEY"); HashKey != "" {
+		HashKeyAgent = HashKey
+	}
+	if Limit := os.Getenv("RATE_LIMIT"); Limit != "" {
+		if limit, err := strconv.Atoi(Limit); err == nil {
+			RateLimit = limit
+		}
+	}
 }
 
 func GetAgentConfig() {
@@ -70,12 +85,14 @@ func GetAgentConfig() {
 	flag.StringVar(&FlagRunAgAddr, "a", ":8080", "address and port to run server")
 	flag.IntVar(&reportInterval, "r", 10, "time interval for generate metrics")
 	flag.IntVar(&pollInterval, "p", 2, "time interval for send request to server")
+	flag.StringVar(&HashKeyAgent, "k", "", "secret hash key for agent")
+	flag.IntVar(&RateLimit, "l", 2, "count outgoing request")
 
 	flag.Parse()
 	getEnvConfigAgent()
 
-	TimeInterval = time.Duration(pollInterval) * time.Second
-	TimeInterval2 = time.Duration(reportInterval) * time.Second
+	PollInterval = time.Duration(pollInterval) * time.Second
+	ReportInterval = time.Duration(reportInterval) * time.Second
 }
 
 func GetServerConfig() {
@@ -87,6 +104,7 @@ func GetServerConfig() {
 	flag.StringVar(&FileStoragePath, "f", "/tmp/metrics-db.json", "path to save file")
 	flag.BoolVar(&Restore, "r", true, "restore data from file or not")
 	flag.StringVar(&DatabaseDsn, "d", "", "database address")
+	flag.StringVar(&HashKeyServer, "k", "", "secret hash key for server")
 
 	flag.Parse()
 	getEnvConfigServer()

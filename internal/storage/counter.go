@@ -1,4 +1,4 @@
-package metrics
+package storage
 
 import (
 	"fmt"
@@ -17,6 +17,12 @@ type CounterMetrics struct {
 func (c *CounterMetrics) Init() {
 	if c.Metrics == nil {
 		c.Metrics = make(map[string]int64)
+	}
+}
+
+func (c *CounterMetrics) Close() {
+	if c.Metrics != nil {
+		clear(c.Metrics)
 	}
 }
 

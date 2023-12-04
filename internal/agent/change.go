@@ -1,18 +1,22 @@
-package metrics
+package agent
 
 import (
+	"github.com/JuliyaMS/service-metrics-alerting/internal/storage"
+	"github.com/shirou/gopsutil/v3/mem"
 	"math/rand"
 	"runtime"
 )
 
 var PollCount = int64(0)
 
-var GaugeAgent = GaugeMetrics{Metrics: map[string]float64{"Alloc": 0, "BuckHashSys": 0, "Frees": 0,
+var GaugeAgent = storage.GaugeMetrics{Metrics: map[string]float64{"Alloc": 0, "BuckHashSys": 0, "Frees": 0,
 	"GCCPUFraction": 0, "GCSys": 0, "HeapAlloc": 0, "HeapIdle": 0, "HeapInuse": 0,
 	"HeapObjects": 0, "HeapReleased": 0, "HeapSys": 0, "LastGC": 0, "Lookups": 0,
 	"MCacheInuse": 0, "MSpanInuse": 0, "MSpanSys": 0, "Mallocs": 0, "NextGC": 0,
 	"NumForcedGC": 0, "NumGC": 0, "OtherSys": 0, "PauseTotalNs": 0, "StackInuse": 0,
 	"StackSys": 0, "Sys": 0, "TotalAlloc": 0, "RandomValue": 0}}
+
+var OptionalGaugeMetricAgent = storage.GaugeMetrics{Metrics: map[string]float64{"TotalMemory": 0, "FreeMemory": 0, "CPUutilization1": 0}}
 
 func randomValue() float64 {
 	val1 := float64(rand.Intn(1000))
@@ -20,9 +24,10 @@ func randomValue() float64 {
 	return val1 + (val2-val1)*rand.Float64()
 }
 
-func ChangeMetrics(rtm *runtime.MemStats) {
+func ChangeMetricsBaseMetrics(rtm *runtime.MemStats, in chan<- storage.GaugeMetrics) {
 
 	runtime.ReadMemStats(rtm)
+
 	GaugeAgent.Metrics["Alloc"] = float64(rtm.Alloc)
 	GaugeAgent.Metrics["BuckHashSys"] = float64(rtm.BuckHashSys)
 	GaugeAgent.Metrics["Frees"] = float64(rtm.Frees)
@@ -49,6 +54,26 @@ func ChangeMetrics(rtm *runtime.MemStats) {
 	GaugeAgent.Metrics["Sys"] = float64(rtm.Sys)
 	GaugeAgent.Metrics["TotalAlloc"] = float64(rtm.TotalAlloc)
 	GaugeAgent.Metrics["RandomValue"] = randomValue()
+	if (PollCount % 5) == 0 {
+		in <- GaugeAgent
+	}
+
+}
+
+func ChangeOptionalMetrics(in chan<- storage.GaugeMetrics) {
+	v, _ := mem.VirtualMemory()
+	OptionalGaugeMetricAgent.Metrics["TotalMemory"] = float64(v.Total)
+	OptionalGaugeMetricAgent.Metrics["FreeMemory"] = float64(v.Free)
+	OptionalGaugeMetricAgent.Metrics["CPUutilization1"] = v.UsedPercent
+	if (PollCount % 5) == 0 {
+		in <- OptionalGaugeMetricAgent
+	}
+}
+
+func ChangeMetrics(rtm *runtime.MemStats, in chan<- storage.GaugeMetrics) {
 	PollCount += 1
+
+	go ChangeMetricsBaseMetrics(rtm, in)
+	go ChangeOptionalMetrics(in)
 
 }

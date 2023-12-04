@@ -5,7 +5,7 @@ import (
 	"github.com/JuliyaMS/service-metrics-alerting/internal/agent"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
-	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
+	"github.com/JuliyaMS/service-metrics-alerting/internal/storage"
 	"runtime"
 	"time"
 )
@@ -14,35 +14,36 @@ func main() {
 	config.GetAgentConfig()
 
 	requestURL := fmt.Sprintf("http://%s/updates/", config.FlagRunAgAddr)
-	agent := agent.NewAgent(requestURL, true)
+	client := agent.NewAgent(requestURL, true)
 
 	var rtm runtime.MemStats
-	ticker := time.NewTicker(config.TimeInterval)
-	ticker2 := time.NewTicker(config.TimeInterval2)
+	PollTicker := time.NewTicker(config.PollInterval)
+	ReportTicker := time.NewTicker(config.ReportInterval)
 
 	tickerChan := make(chan bool)
 
 	go func() {
+		in := make(chan storage.GaugeMetrics, 2)
 		for {
 			select {
 			case <-tickerChan:
+				close(in)
 				return
-			case tm := <-ticker.C:
+			case tm := <-PollTicker.C:
 				logger.Logger.Infow("Change metrics", "time", tm)
-				metrics.ChangeMetrics(&rtm)
-			case tm2 := <-ticker2.C:
+				agent.ChangeMetrics(&rtm, in)
+			case tm2 := <-ReportTicker.C:
 				logger.Logger.Infow("Send metrics", "time", tm2)
-				err := agent.SendBatchDataJSON()
-				if err != nil {
-					panic(err)
+				for i := 1; i <= config.RateLimit; i++ {
+					go client.Worker(i, in)
 				}
 			}
 		}
 	}()
 
 	time.Sleep(100 * time.Second)
-	ticker.Stop()
-	ticker2.Stop()
+	PollTicker.Stop()
+	ReportTicker.Stop()
 	tickerChan <- true
 
 }

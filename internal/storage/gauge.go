@@ -1,4 +1,4 @@
-package metrics
+package storage
 
 import (
 	"fmt"
@@ -17,6 +17,12 @@ type GaugeMetrics struct {
 func (g *GaugeMetrics) Init() {
 	if g.Metrics == nil {
 		g.Metrics = make(map[string]float64)
+	}
+}
+
+func (g *GaugeMetrics) Close() {
+	if g.Metrics != nil {
+		clear(g.Metrics)
 	}
 }
 

@@ -79,7 +79,6 @@ func CompressionGzip(h http.HandlerFunc) http.HandlerFunc {
 
 		if supportsGzip {
 			logger.Logger.Info("Start compress data")
-			fmt.Println(w.Header())
 			cw := NewCompressWriter(w)
 			ow = cw
 
@@ -97,6 +96,7 @@ func CompressionGzip(h http.HandlerFunc) http.HandlerFunc {
 		sendsGzip := strings.Contains(contentEncoding, "gzip")
 		if sendsGzip {
 			logger.Logger.Infow("Read compress data")
+			fmt.Println(r.Body)
 			cr, err := NewCompressReader(r.Body)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
