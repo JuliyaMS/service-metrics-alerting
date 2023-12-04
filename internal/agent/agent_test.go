@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/handlers"
-	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
 	"github.com/stretchr/testify/assert"
 	"net/http/httptest"
 	"runtime"
@@ -18,7 +17,7 @@ func TestSendRequest(t *testing.T) {
 	defer srv.Close()
 
 	var rtm runtime.MemStats
-	metrics.ChangeMetrics(&rtm, nil)
+	ChangeMetrics(&rtm, nil)
 
 	tests := []struct {
 		nameTest string
@@ -53,7 +52,7 @@ func TestSendRequestJSON(t *testing.T) {
 	defer srv.Close()
 
 	var rtm runtime.MemStats
-	metrics.ChangeMetrics(&rtm, nil)
+	ChangeMetrics(&rtm, nil)
 
 	tests := []struct {
 		nameTest string

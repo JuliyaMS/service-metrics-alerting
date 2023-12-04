@@ -13,8 +13,8 @@ var FlagRunSerAddr string
 var FlagRunAgAddr string
 var HashKeyAgent string
 var HashKeyServer string
-var TimeInterval time.Duration
-var TimeInterval2 time.Duration
+var PollInterval time.Duration
+var ReportInterval time.Duration
 var StoreInterval time.Duration
 var reportInterval int
 var pollInterval int
@@ -91,8 +91,8 @@ func GetAgentConfig() {
 	flag.Parse()
 	getEnvConfigAgent()
 
-	TimeInterval = time.Duration(pollInterval) * time.Second
-	TimeInterval2 = time.Duration(reportInterval) * time.Second
+	PollInterval = time.Duration(pollInterval) * time.Second
+	ReportInterval = time.Duration(reportInterval) * time.Second
 }
 
 func GetServerConfig() {

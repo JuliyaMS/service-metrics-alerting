@@ -1,12 +1,8 @@
 package handlers
 
 import (
-	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/JuliyaMS/service-metrics-alerting/internal/config"
-	"github.com/JuliyaMS/service-metrics-alerting/internal/hash"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/html"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/logger"
 	"github.com/JuliyaMS/service-metrics-alerting/internal/metrics"
@@ -15,7 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 	"html/template"
-	"io"
 	"net/http"
 	"strconv"
 )
@@ -25,7 +20,6 @@ type Handlers struct {
 }
 
 func NewHandlers(stor storage.Repositories) *Handlers {
-	fmt.Println(stor)
 	return &Handlers{
 		MemStor: stor,
 	}
@@ -150,15 +144,6 @@ func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if config.HashKeyServer != "" {
-		err := h.checkSignature(r)
-		if err != nil {
-			logger.Logger.Error("Get error while check signature: ", err.Error())
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-	}
-
 	logger.Logger.Infow("decoding request")
 
 	var req metrics.Metrics
@@ -194,13 +179,6 @@ func (h *Handlers) requestUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	sign, errSign := h.createSignature(req)
-	if errSign != nil {
-		logger.Logger.Error("Get error while create signature: ", errSign)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	r.Header.Set("HashSHA256", sign)
 	w.WriteHeader(http.StatusOK)
 
 	logger.Logger.Infow("Encode data for response")
@@ -220,15 +198,6 @@ func (h *Handlers) requestGetValue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if config.HashKeyServer != "" {
-		err := h.checkSignature(r)
-		if err != nil {
-			logger.Logger.Error("Get error while check signature: ", err.Error())
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-	}
-
 	logger.Logger.Infow("decoding request")
 	var req metrics.Metrics
 	dec := json.NewDecoder(r.Body)
@@ -237,7 +206,7 @@ func (h *Handlers) requestGetValue(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	fmt.Println(h.MemStor)
+
 	if req.MType == "gauge" {
 		logger.Logger.Infow("Get gauge metric value", "name", req.ID)
 		Value, err := strconv.ParseFloat(h.MemStor.Get(req.MType, req.ID), 64)
@@ -271,13 +240,6 @@ func (h *Handlers) requestGetValue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	sign, errSign := h.createSignature(req)
-	if errSign != nil {
-		logger.Logger.Error("Get error while create signature: ", errSign)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	r.Header.Set("HashSHA256", sign)
 	w.WriteHeader(http.StatusOK)
 
 	logger.Logger.Infow("Encode data for response")
@@ -295,7 +257,7 @@ func (h *Handlers) requestEmpty(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusBadRequest)
 }
 
-func (h *Handlers) PingDB(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) pingDB(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("start handler: PingDB")
 
 	if err := h.MemStor.CheckConnection(); err != nil {
@@ -308,22 +270,13 @@ func (h *Handlers) PingDB(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("sending HTTP 200 response")
 }
 
-func (h *Handlers) UpdatesDB(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) updatesDB(w http.ResponseWriter, r *http.Request) {
 	logger.Logger.Info("Start handler: UpdatesDB")
 
 	if r.Method != http.MethodPost {
 		logger.Logger.Debug("Got request with bad method", zap.String("method", r.Method))
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
-	}
-
-	if config.HashKeyServer != "" {
-		err := h.checkSignature(r)
-		if err != nil {
-			logger.Logger.Error("Get error while check signature: ", err.Error())
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
 	}
 
 	logger.Logger.Infow("Decoding request")
@@ -343,33 +296,6 @@ func (h *Handlers) UpdatesDB(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	logger.Logger.Infow("Sending HTTP 200 response")
-}
-
-func (h *Handlers) checkSignature(r *http.Request) error {
-	logger.Logger.Info("Check signature from agent")
-	data, err := io.ReadAll(r.Body)
-	r.Body = io.NopCloser(bytes.NewBuffer(data))
-	if err != nil {
-		return err
-	}
-	sign, err := base64.StdEncoding.DecodeString(r.Header.Get("HashSHA256"))
-	if err != nil {
-		return err
-	}
-	fmt.Println(string(data))
-	if !bytes.Equal(sign, hash.GetSignature(data, config.HashKeyServer)) {
-		return err
-	}
-	return nil
-}
-
-func (h *Handlers) createSignature(req metrics.Metrics) (string, error) {
-	data, err := json.Marshal(req)
-	if err != nil {
-		return "", err
-	}
-	sign := hash.GetSignature(data, config.HashKeyAgent)
-	return base64.StdEncoding.EncodeToString(sign), nil
 }
 
 func routePost(r *chi.Mux, h *Handlers) {
@@ -401,12 +327,17 @@ func routeGet(r *chi.Mux, h *Handlers) {
 	})
 }
 
-func NewRouter() (*chi.Mux, *Handlers) {
+type Router struct {
+	handlers *Handlers
+	R        *chi.Mux
+}
+
+func NewRouter() Router {
 	logger.Logger.Infow("init router and handlers")
 
 	stor := storage.NewStorage()
 
-	var handlers = NewHandlers(stor)
+	handlers := NewHandlers(stor)
 	handlers.MemStor.Init()
 
 	logger.Logger.Info("create new router")
@@ -415,10 +346,18 @@ func NewRouter() (*chi.Mux, *Handlers) {
 	routeGet(r, handlers)
 
 	logger.Logger.Infow("init router another function")
-	r.Post("/value/", m.LoggingServer(m.CompressionGzip(handlers.requestGetValue)))
-	r.Post("/updates/", m.LoggingServer(m.CompressionGzip(handlers.UpdatesDB)))
+	r.Post("/value/", m.LoggingServer(m.CompressionGzip(m.SignatureData(handlers.requestGetValue))))
+	r.Post("/updates/", m.LoggingServer(m.CompressionGzip(m.SignatureData(handlers.updatesDB))))
 	r.Get("/", m.LoggingServer(m.CompressionGzip(handlers.requestGetAll)))
-	r.Get("/ping", m.LoggingServer(handlers.PingDB))
+	r.Get("/ping", m.LoggingServer(handlers.pingDB))
 
-	return r, handlers
+	return Router{R: r, handlers: handlers}
+}
+
+func (ro *Router) Stop() {
+	logger.Logger.Info("Stop server...")
+	err := ro.handlers.MemStor.Close()
+	if err != nil {
+		logger.Logger.Error("Get error while close connection to storage: ", err.Error())
+	}
 }
